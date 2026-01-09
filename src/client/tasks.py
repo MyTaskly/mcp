@@ -39,7 +39,7 @@ class TaskClient(BaseClient):
         if task_id is not None:
             params["task_id"] = task_id
 
-        return await self._get("/tasks/", token, params=params)
+        return await self._get("/tasks", token, params=params)
 
     async def create_task(
         self,
@@ -80,7 +80,7 @@ class TaskClient(BaseClient):
         if description:
             data["description"] = description
 
-        return await self._post("/tasks/", token, json=data)
+        return await self._post("/tasks", token, json=data)
 
     async def update_task(
         self,
