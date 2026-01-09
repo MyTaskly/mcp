@@ -5,6 +5,7 @@ from typing import Optional
 from datetime import datetime, timezone
 from fastapi import HTTPException, Header
 from fastmcp import Context
+from fastmcp.server.dependencies import get_http_request
 from src.config import settings
 
 
@@ -32,7 +33,8 @@ def extract_token_from_context(ctx: Context) -> str:
         HTTPException: If Authorization header is missing or invalid
     """
     try:
-        request = ctx.get_http_request()
+        # Use the correct method to get HTTP request
+        request = get_http_request()
         authorization = request.headers.get("Authorization") or request.headers.get("authorization")
 
         if not authorization:
@@ -44,11 +46,11 @@ def extract_token_from_context(ctx: Context) -> str:
 
         return authorization
 
-    except AttributeError:
-        # Context doesn't have HTTP request (e.g., stdio mode)
+    except (AttributeError, RuntimeError) as e:
+        # Context doesn't have HTTP request (e.g., stdio mode) or not in HTTP context
         raise HTTPException(
             status_code=401,
-            detail="Cannot extract Authorization header from context (not an HTTP transport)",
+            detail=f"Cannot extract Authorization header from context: {str(e)}",
             headers={"WWW-Authenticate": 'Bearer realm="MCP"'}
         )
 
