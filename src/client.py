@@ -41,8 +41,7 @@ class FastAPIClient:
 
         # Use the same SECRET_KEY as FastAPI for user authentication
         # This MUST match the SECRET_KEY in MyTaskly-server config.py
-        secret_key = "349878uoti34h80943iotrhf-83490ewofridsh3t4iner"
-        token = jwt.encode(payload, secret_key, algorithm="HS256")
+        token = jwt.encode(payload, settings.jwt_secret_key, algorithm="HS256")
         return token
 
     async def get_tasks(self, user_id: int) -> List[Dict[str, Any]]:
