@@ -1,13 +1,14 @@
 """MCP meta-tools for advanced operations."""
 
 from typing import Dict, Any, Optional, List
-from src.auth import verify_jwt_token
+from fastmcp import Context
+from src.auth import authenticate_from_context
 from src.client import category_client, task_client
 import difflib
 
 
 async def get_or_create_category(
-    authorization: str,
+    ctx: Context,
     category_name: str,
     description: Optional[str] = None,
     similarity_threshold: float = 0.8
@@ -53,7 +54,7 @@ async def get_or_create_category(
         # Se "Progetti" non esiste, viene creata automaticamente
         Bot response: "✅ Categoria 'Progetti' creata. Ora puoi aggiungerci task."
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     # 1. Try to find exact match
     all_categories = await category_client.get_categories(user_id)
@@ -106,7 +107,7 @@ async def get_or_create_category(
 
 
 async def move_all_tasks_between_categories(
-    authorization: str,
+    ctx: Context,
     source_category: str,
     target_category: str,
     auto_create_target: bool = True
@@ -162,7 +163,7 @@ async def move_all_tasks_between_categories(
         )
         Bot response: "✅ Spostati 10 task da 'Lavoro' a 'Ufficio'"
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     # Step 1: Find source category
     all_categories = await category_client.get_categories(user_id)
@@ -280,7 +281,7 @@ async def move_all_tasks_between_categories(
 
 
 async def add_multiple_tasks(
-    authorization: str,
+    ctx: Context,
     tasks: List[Dict[str, Any]],
     auto_create_categories: bool = False
 ) -> Dict[str, Any]:
@@ -344,7 +345,7 @@ async def add_multiple_tasks(
         )
         Bot response: "✅ Creati 3 task: Spesa, Dentista, Palestra"
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     created_tasks = []
     failed_tasks = []

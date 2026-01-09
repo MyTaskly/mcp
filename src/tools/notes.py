@@ -1,11 +1,12 @@
 """MCP tools for note management."""
 
 from typing import Dict, Any, List, Optional
-from src.auth import verify_jwt_token
+from fastmcp import Context
+from src.auth import authenticate_from_context
 from src.client import note_client
 
 
-async def get_notes(authorization: str) -> List[Dict[str, Any]]:
+async def get_notes(ctx: Context) -> List[Dict[str, Any]]:
     """
     Recupera tutte le note salvate dall'utente.
 
@@ -33,13 +34,13 @@ async def get_notes(authorization: str) -> List[Dict[str, Any]]:
         Bot calls: get_notes(authorization="Bearer eyJ...")
         Bot response: "Hai 5 note salvate: 'Comprare il latte', 'Chiamare dentista', ..."
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
     notes = await note_client.get_notes(user_id)
     return notes
 
 
 async def create_note(
-    authorization: str,
+    ctx: Context,
     title: str,
     position_x: str = "0",
     position_y: str = "0",
@@ -88,7 +89,7 @@ async def create_note(
         )
         Bot response: "✅ Nota creata: 'Chiamare dentista domani'"
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     note = await note_client.create_note(
         user_id=user_id,
@@ -102,7 +103,7 @@ async def create_note(
 
 
 async def update_note(
-    authorization: str,
+    ctx: Context,
     note_id: int,
     title: Optional[str] = None,
     position_x: Optional[str] = None,
@@ -144,7 +145,7 @@ async def update_note(
             2. update_note(note_id=5, color="#4CAF50")
         Bot response: "✅ Nota aggiornata con colore verde"
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     result = await note_client.update_note(
         user_id=user_id,
@@ -162,7 +163,7 @@ async def update_note(
     }
 
 
-async def delete_note(authorization: str, note_id: int) -> Dict[str, Any]:
+async def delete_note(ctx: Context, note_id: int) -> Dict[str, Any]:
     """
     Elimina una nota definitivamente.
 
@@ -188,7 +189,7 @@ async def delete_note(authorization: str, note_id: int) -> Dict[str, Any]:
             2. delete_note(note_id=5)
         Bot response: "✅ Nota 'Comprare il latte' eliminata"
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     result = await note_client.delete_note(user_id, note_id)
 

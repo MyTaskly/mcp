@@ -2,13 +2,14 @@
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
-from src.auth import verify_jwt_token
+from fastmcp import Context
+from src.auth import authenticate_from_context
 from src.client import task_client, category_client
 from src.formatters import format_tasks_for_ui
 
 
 async def get_tasks(
-    authorization: str,
+    ctx: Context,
     category_id: Optional[int] = None,
     priority: Optional[str] = None,
     status: Optional[str] = None,
@@ -56,7 +57,7 @@ async def get_tasks(
           - Visual: Renders table/list with formatted data
           - Voice: Reads voice_summary
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     # Fetch tasks from FastAPI
     tasks = await task_client.get_tasks(user_id, category_id, priority, status, task_id)
@@ -68,7 +69,7 @@ async def get_tasks(
 
 
 async def update_task(
-    authorization: str,
+    ctx: Context,
     task_id: int,
     title: Optional[str] = None,
     description: Optional[str] = None,
@@ -121,7 +122,7 @@ async def update_task(
             2. update_task(task_id=42, title="Riunione")
         Bot response: "✅ Task aggiornato: 'Meeting' → 'Riunione'"
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     result = await task_client.update_task(
         user_id=user_id,
@@ -140,7 +141,7 @@ async def update_task(
     }
 
 
-async def complete_task(authorization: str, task_id: int) -> Dict[str, Any]:
+async def complete_task(ctx: Context, task_id: int) -> Dict[str, Any]:
     """
     Segna un task come COMPLETATO.
 
@@ -169,7 +170,7 @@ async def complete_task(authorization: str, task_id: int) -> Dict[str, Any]:
             2. complete_task(task_id=15)
         Bot response: "✅ Task 'Spesa' completato!"
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     # Update task status to Completato
     result = await task_client.update_task(
@@ -184,7 +185,7 @@ async def complete_task(authorization: str, task_id: int) -> Dict[str, Any]:
     }
 
 
-async def get_task_stats(authorization: str) -> Dict[str, Any]:
+async def get_task_stats(ctx: Context) -> Dict[str, Any]:
     """
     Ottieni statistiche complete sui task dell'utente.
 
@@ -223,7 +224,7 @@ async def get_task_stats(authorization: str) -> Dict[str, Any]:
         Bot calls: get_task_stats(authorization="Bearer eyJ...")
         Bot response: "Hai 25 task totali: 10 completati (40%), 12 in sospeso. 5 sono ad alta priorità."
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     # Get statistics from FastAPI
     stats = await task_client.get_task_statistics(user_id)
@@ -232,7 +233,7 @@ async def get_task_stats(authorization: str) -> Dict[str, Any]:
 
 
 async def get_next_due_task(
-    authorization: str,
+    ctx: Context,
     limit: int = 1
 ) -> Dict[str, Any]:
     """
@@ -277,7 +278,7 @@ async def get_next_due_task(
         Bot calls: get_next_due_task(authorization="Bearer eyJ...", limit=1)
         Bot response: "Il prossimo task è 'Meeting' che scade venerdì 15 dicembre alle 10:00"
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     # Validate limit
     if limit < 1:
@@ -341,7 +342,7 @@ async def get_next_due_task(
         }
 
 
-async def get_overdue_tasks(authorization: str) -> List[Dict[str, Any]]:
+async def get_overdue_tasks(ctx: Context) -> List[Dict[str, Any]]:
     """
     Ottieni tutti i task SCADUTI (la data di fine è passata).
 
@@ -375,7 +376,7 @@ async def get_overdue_tasks(authorization: str) -> List[Dict[str, Any]]:
         Bot calls: get_overdue_tasks(authorization="Bearer eyJ...")
         Bot response: "Hai 3 task scaduti: 'Bolletta' (5 giorni fa), 'Dentista' (2 giorni fa), ..."
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     # Get all tasks
     all_tasks = await task_client.get_tasks(user_id)
@@ -414,7 +415,7 @@ async def get_overdue_tasks(authorization: str) -> List[Dict[str, Any]]:
 
 
 async def get_upcoming_tasks(
-    authorization: str,
+    ctx: Context,
     days: int = 7
 ) -> List[Dict[str, Any]]:
     """
@@ -453,7 +454,7 @@ async def get_upcoming_tasks(
         Bot calls: get_upcoming_tasks(authorization="Bearer eyJ...", days=7)
         Bot response: "Questa settimana hai 5 task: 'Meeting' (domani), 'Spesa' (mercoledì), ..."
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     # Get all tasks
     all_tasks = await task_client.get_tasks(user_id)
@@ -496,7 +497,7 @@ async def get_upcoming_tasks(
 
 
 async def add_task(
-    authorization: str,
+    ctx: Context,
     title: str,
     category_name: str = "Generale",
     end_time: Optional[str] = None,
@@ -562,7 +563,7 @@ async def add_task(
         )
         Bot response: "✅ Task 'Riunione' creato per domani alle 10:00 nella categoria 'Lavoro'"
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     # Validate title length
     if len(title) > 100:

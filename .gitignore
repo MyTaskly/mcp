@@ -34,6 +34,7 @@ ENV/
 .idea/
 *.swp
 *.swo
+.claude/settings.local.json
 
 # Testing
 .pytest_cache/
@@ -43,3 +44,5 @@ htmlcov/
 # Logs
 *.log
 logs/
+
+tests/external/test_openai_agents.py

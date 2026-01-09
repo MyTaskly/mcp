@@ -1,11 +1,12 @@
 """MCP tools for category management."""
 
 from typing import Dict, Any, Optional
-from src.auth import verify_jwt_token
+from fastmcp import Context
+from src.auth import authenticate_from_context
 from src.client import category_client
 
 
-async def get_my_categories(authorization: str) -> Dict[str, Any]:
+async def get_my_categories(ctx: Context) -> Dict[str, Any]:
     """
     Ottieni TUTTE le categorie dell'utente.
 
@@ -13,7 +14,7 @@ async def get_my_categories(authorization: str) -> Dict[str, Any]:
     Ogni categoria ha un ID unico che puoi usare negli altri tools.
 
     Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+        Automatic - JWT token extracted from SSE connection headers
 
     Returns:
         {
@@ -36,10 +37,10 @@ async def get_my_categories(authorization: str) -> Dict[str, Any]:
 
     Example usage:
         User: "Quali categorie ho?"
-        Bot calls: get_my_categories(authorization="Bearer eyJ...")
+        Bot calls: get_my_categories()
         Bot response: "Hai 5 categorie: Lavoro, Personale, Studio, Sport, Famiglia"
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
     categories = await category_client.get_categories(user_id)
 
     return {
@@ -49,7 +50,7 @@ async def get_my_categories(authorization: str) -> Dict[str, Any]:
 
 
 async def create_category(
-    authorization: str,
+    ctx: Context,
     name: str,
     description: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -57,7 +58,7 @@ async def create_category(
     Crea una NUOVA categoria per organizzare i task.
 
     Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+        Automatic - JWT token extracted from SSE connection headers
 
     Parameters:
     - name: Nome della categoria (obbligatorio, es: "Lavoro", "Progetti", "Casa")
@@ -80,14 +81,10 @@ async def create_category(
 
     Example usage:
         User: "Crea una categoria Progetti"
-        Bot calls: create_category(
-            authorization="Bearer eyJ...",
-            name="Progetti",
-            description="Progetti personali"
-        )
+        Bot calls: create_category(name="Progetti", description="Progetti personali")
         Bot response: "✅ Categoria 'Progetti' creata con successo"
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
     result = await category_client.create_category(user_id, name, description)
 
     return {
@@ -97,7 +94,7 @@ async def create_category(
 
 
 async def update_category(
-    authorization: str,
+    ctx: Context,
     category_id: int,
     new_name: Optional[str] = None,
     new_description: Optional[str] = None
@@ -110,7 +107,7 @@ async def update_category(
     2. Usa l'ID della categoria trovata in questa funzione per modificarla
 
     Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+        Automatic - JWT token extracted from SSE connection headers
 
     Parameters:
     - category_id: ID della categoria da modificare (ottienilo con get_my_categories)
@@ -134,7 +131,7 @@ async def update_category(
             2. update_category(category_id=5, new_name="Ufficio")
         Bot response: "✅ Categoria rinominata da 'Lavoro' a 'Ufficio'"
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
     result = await category_client.update_category(
         user_id,
         category_id,
@@ -150,7 +147,7 @@ async def update_category(
 
 
 async def search_categories(
-    authorization: str,
+    ctx: Context,
     search_term: str,
     max_suggestions: int = 5
 ) -> Dict[str, Any]:
@@ -161,7 +158,7 @@ async def search_categories(
     Mostra corrispondenze esatte e suggerimenti di categorie simili.
 
     Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+        Automatic - JWT token extracted from SSE connection headers
 
     Parameters:
     - search_term: Parte del nome della categoria da cercare
@@ -184,10 +181,10 @@ async def search_categories(
 
     Example usage:
         User: "Cerca categorie tipo progetto"
-        Bot calls: search_categories(authorization="Bearer eyJ...", search_term="proj")
+        Bot calls: search_categories(search_term="proj")
         Bot response: "Ho trovato 2 categorie simili: 'Progetti', 'Progetto Casa'"
     """
-    user_id = verify_jwt_token(authorization)
+    user_id = authenticate_from_context(ctx)
 
     # Get all categories
     categories = await category_client.get_categories(user_id)

@@ -4,12 +4,53 @@ import jwt
 from typing import Optional
 from datetime import datetime, timezone
 from fastapi import HTTPException, Header
+from fastmcp import Context
 from src.config import settings
 
 
 class AuthenticationError(Exception):
     """Custom exception for authentication errors."""
     pass
+
+
+def extract_token_from_context(ctx: Context) -> str:
+    """
+    Extract JWT token from MCP Context (SSE request headers).
+
+    This function retrieves the Authorization header from the HTTP request
+    that established the SSE connection. This is the secure way to handle
+    authentication in MCP tools - the token stays in the HTTP header and
+    is never exposed to the LLM.
+
+    Args:
+        ctx: FastMCP Context object containing request information
+
+    Returns:
+        authorization: Authorization header string "Bearer <token>"
+
+    Raises:
+        HTTPException: If Authorization header is missing or invalid
+    """
+    try:
+        request = ctx.get_http_request()
+        authorization = request.headers.get("Authorization") or request.headers.get("authorization")
+
+        if not authorization:
+            raise HTTPException(
+                status_code=401,
+                detail="Missing Authorization header in SSE connection",
+                headers={"WWW-Authenticate": 'Bearer realm="MCP"'}
+            )
+
+        return authorization
+
+    except AttributeError:
+        # Context doesn't have HTTP request (e.g., stdio mode)
+        raise HTTPException(
+            status_code=401,
+            detail="Cannot extract Authorization header from context (not an HTTP transport)",
+            headers={"WWW-Authenticate": 'Bearer realm="MCP"'}
+        )
 
 
 def verify_jwt_token(authorization: Optional[str] = Header(None)) -> int:
@@ -140,6 +181,37 @@ def verify_jwt_token(authorization: Optional[str] = Header(None)) -> int:
             detail="Authentication failed",
             headers={"WWW-Authenticate": 'Bearer error="invalid_token"'}
         )
+
+
+def authenticate_from_context(ctx: Context) -> int:
+    """
+    Authenticate user from MCP Context and return user_id.
+
+    This is the recommended function for MCP tools using SSE transport.
+    It extracts the Authorization header from the SSE connection and
+    validates the JWT token.
+
+    Args:
+        ctx: FastMCP Context object
+
+    Returns:
+        user_id: Integer user ID extracted from validated token
+
+    Raises:
+        HTTPException: If authentication fails for any reason
+
+    Example usage in MCP tool:
+        ```python
+        from fastmcp import Context
+        from src.auth import authenticate_from_context
+
+        async def my_tool(ctx: Context, param1: str) -> Dict[str, Any]:
+            user_id = authenticate_from_context(ctx)
+            # ... rest of tool logic
+        ```
+    """
+    authorization = extract_token_from_context(ctx)
+    return verify_jwt_token(authorization)
 
 
 def create_test_token(user_id: int, expires_minutes: int = 30) -> str:

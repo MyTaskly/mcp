@@ -10,7 +10,10 @@
       "Bash(source:*)",
       "Bash(timeout 30 python:*)",
       "Bash(python tests/generate_token.py:*)",
-      "Bash(python tests/test_token_decode.py:*)"
+      "Bash(python tests/test_token_decode.py:*)",
+      "Bash(pip install:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(git reset:*)"
     ]
   }
 }
