@@ -97,6 +97,63 @@ class FastAPIClient:
             response.raise_for_status()
             return response.json()
 
+    async def create_task(
+        self,
+        user_id: int,
+        title: str,
+        category_id: int,
+        description: Optional[str] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        priority: str = "Media",
+        status: str = "In sospeso"
+    ) -> Dict[str, Any]:
+        """
+        Create a new task for a user.
+
+        Args:
+            user_id: User ID to create task for
+            title: Task title
+            category_id: Category ID for the task
+            description: Optional task description
+            start_time: Optional start time (format: YYYY-MM-DD HH:MM:SS)
+            end_time: Optional end time (format: YYYY-MM-DD HH:MM:SS)
+            priority: Task priority (Alta, Media, Bassa)
+            status: Task status (In sospeso, Completato, Annullato)
+
+        Returns:
+            Created task dictionary
+        """
+        token = await self._get_user_token(user_id)
+        headers = {
+            "Content-Type": "application/json",
+            "X-API-Key": self.api_key,
+            "Authorization": f"Bearer {token}"
+        }
+
+        task_data = {
+            "title": title,
+            "category_id": category_id,
+            "priority": priority,
+            "status": status
+        }
+
+        if description:
+            task_data["description"] = description
+        if start_time:
+            task_data["start_time"] = start_time
+        if end_time:
+            task_data["end_time"] = end_time
+
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{self.base_url}/tasks",  # No trailing slash!
+                headers=headers,
+                json=task_data
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def create_note(
         self,
         user_id: int,
@@ -166,5 +223,8 @@ class FastAPIClient:
                 return {"status": "unhealthy", "error": str(e)}
 
 
-# Global client instance
+# Global client instances
 fastapi_client = FastAPIClient()
+task_client = fastapi_client  # Alias for task operations
+category_client = fastapi_client  # Alias for category operations
+note_client = fastapi_client  # Alias for note operations
