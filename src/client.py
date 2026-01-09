@@ -23,26 +23,24 @@ class FastAPIClient:
         This token is separate from the MCP authentication token.
         It's used by the MCP server to act on behalf of the user when
         calling FastAPI backend endpoints.
+
+        Token format matches FastAPI server expectations:
+        - sub: user_id as string (FastAPI accepts numeric user IDs)
+        - type: "access" (required by FastAPI)
+        - exp: expiration timestamp (30 minutes)
         """
         import jwt
         from datetime import datetime, timedelta, timezone
 
-        # Query FastAPI backend to get username from user_id
-        import httpx
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            # Use a temporary admin-level token or query the user directly
-            # For now, use user_id as username (will be fixed later)
-            username = str(user_id)
-
         now = datetime.now(timezone.utc)
         payload = {
-            "sub": username,
-            "type": "access",
+            "sub": str(user_id),  # FastAPI accepts user_id as username
+            "type": "access",      # Required by FastAPI token validation
             "exp": int((now + timedelta(minutes=30)).timestamp()),
         }
 
         # Use the same SECRET_KEY as FastAPI for user authentication
-        # This should match config.py SECRET_KEY, not JWT_SECRET_KEY
+        # This MUST match the SECRET_KEY in MyTaskly-server config.py
         secret_key = "349878uoti34h80943iotrhf-83490ewofridsh3t4iner"
         token = jwt.encode(payload, secret_key, algorithm="HS256")
         return token
