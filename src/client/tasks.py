@@ -70,6 +70,7 @@ class TaskClient(BaseClient):
         data = {
             "user": str(user_id),  # FastAPI schema requires 'user' field
             "title": title,
+            "description": description if description else "",  # Always send description (FastAPI requires it)
             "category_id": category_id,
             "priority": priority,
             "status": "In sospeso"
@@ -78,8 +79,6 @@ class TaskClient(BaseClient):
             data["end_time"] = end_time
         if start_time:
             data["start_time"] = start_time
-        if description:
-            data["description"] = description
 
         return await self._post("/tasks", token, json=data)
 
