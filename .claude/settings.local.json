@@ -13,7 +13,13 @@
       "Bash(python tests/test_token_decode.py:*)",
       "Bash(pip install:*)",
       "Bash(python -m pytest:*)",
-      "Bash(git reset:*)"
+      "Bash(git reset:*)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(git push:*)",
+      "Bash(git pull:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     # MCP Server Configuration
     mcp_server_name: str = "MyTaskly MCP Server"
-    mcp_server_version: str = "0.1.0"
+    mcp_server_version: str = "0.1.1"
 
     # Logging
     log_level: str = "INFO"
