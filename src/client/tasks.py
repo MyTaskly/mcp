@@ -45,7 +45,7 @@ class TaskClient(BaseClient):
         self,
         user_id: int,
         title: str,
-        category_name: str = "Generale",
+        category_id: int,
         end_time: Optional[str] = None,
         start_time: Optional[str] = None,
         description: Optional[str] = None,
@@ -57,7 +57,7 @@ class TaskClient(BaseClient):
         Args:
             user_id: User ID
             title: Task title (max 100 characters)
-            category_name: Category name (default: "Generale")
+            category_id: Category ID (required)
             end_time: End date/time (format: YYYY-MM-DD HH:MM:SS)
             start_time: Start date/time (optional)
             description: Task description
@@ -69,7 +69,7 @@ class TaskClient(BaseClient):
         token = await self._get_user_token(user_id)
         data = {
             "title": title,
-            "category_name": category_name,
+            "category_id": category_id,
             "priority": priority,
             "status": "In sospeso"
         }
