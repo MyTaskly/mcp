@@ -15,8 +15,7 @@ async def get_tasks(
     status: Optional[str] = None,
     task_id: Optional[int] = None
 ) -> Dict[str, Any]:
-    """
-    Recupera i task dell'utente con filtri opzionali.
+    """Recupera i task dell'utente con filtri opzionali.
 
     Returns tasks in a format optimized for React Native components with:
     - Formatted data ready for mobile UI
@@ -49,13 +48,6 @@ async def get_tasks(
     - Task in una categoria (quando conosci l'ID): get_tasks(category_id=3)
     - Task in una categoria per NOME: PRIMA get_my_categories() → trova ID → POI get_tasks(category_id=ID_trovato)
     - Task completati in una categoria: get_tasks(category_id=3, status="Completato")
-
-    Example usage (from chatbot):
-        User: "Mostrami i miei task"
-        Bot calls: get_tasks(authorization="Bearer eyJ...")
-        Bot response:
-          - Visual: Renders table/list with formatted data
-          - Voice: Reads voice_summary
     """
     user_id = authenticate_from_context(ctx)
 
@@ -78,8 +70,7 @@ async def update_task(
     priority: Optional[str] = None,
     status: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Modifica un task esistente tramite il suo ID.
+    """Modifica un task esistente tramite il suo ID.
 
     ⚠️ IMPORTANTE - PROCEDURA OBBLIGATORIA:
     1. PRIMA chiama get_tasks() per ottenere la lista completa dei task con i loro ID
@@ -104,23 +95,9 @@ async def update_task(
 
     Nota: Specifica solo i campi che vuoi modificare. I campi non specificati mantengono il valore attuale.
 
-    Returns:
-        {
-            "message": "✅ Task 'Meeting' aggiornato con successo",
-            "conflicts": [...],  # Se ci sono conflitti di orario
-            "energy_hint": "..."  # Se l'utente ha menzionato stanchezza
-        }
-
     Esempio corretto:
     1. Chiama get_tasks() → ottieni lista con task_id=42 per "Meeting"
     2. Chiama update_task(task_id=42, title="Riunione importante")
-
-    Example usage:
-        User: "Cambia il titolo del task Meeting in Riunione"
-        Bot calls:
-            1. get_tasks() → trova task_id=42 con title="Meeting"
-            2. update_task(task_id=42, title="Riunione")
-        Bot response: "✅ Task aggiornato: 'Meeting' → 'Riunione'"
     """
     user_id = authenticate_from_context(ctx)
 
@@ -142,8 +119,7 @@ async def update_task(
 
 
 async def complete_task(ctx: Context, task_id: int) -> Dict[str, Any]:
-    """
-    Segna un task come COMPLETATO.
+    """Segna un task come COMPLETATO.
 
     Questo è uno shortcut veloce per marcare un task come completato.
     Se hai bisogno di cambiare lo stato a qualcos'altro, usa update_task.
@@ -154,21 +130,9 @@ async def complete_task(ctx: Context, task_id: int) -> Dict[str, Any]:
     Parameters:
     - task_id: ID del task da completare
 
-    Returns:
-        {
-            "message": "Task 'Spesa' marked as completed"
-        }
-
     Esempi:
     - Voce: "Segna il task 5 come completato" -> complete_task(task_id=5)
     - API: complete_task(task_id=5)
-
-    Example usage:
-        User: "Completa il task Spesa"
-        Bot calls:
-            1. get_tasks() → trova task_id=15 con title="Spesa"
-            2. complete_task(task_id=15)
-        Bot response: "✅ Task 'Spesa' completato!"
     """
     user_id = authenticate_from_context(ctx)
 
@@ -186,8 +150,7 @@ async def complete_task(ctx: Context, task_id: int) -> Dict[str, Any]:
 
 
 async def get_task_stats(ctx: Context) -> Dict[str, Any]:
-    """
-    Ottieni statistiche complete sui task dell'utente.
+    """Ottieni statistiche complete sui task dell'utente.
 
     Restituisce metriche utili per:
     - Monitorare la produttività
@@ -198,31 +161,10 @@ async def get_task_stats(ctx: Context) -> Dict[str, Any]:
     Authentication:
         Requires valid JWT token in Authorization header: "Bearer <token>"
 
-    Returns:
-        {
-            "total_tasks": 25,
-            "completed": 10,
-            "pending": 12,
-            "cancelled": 3,
-            "high_priority": 5,
-            "medium_priority": 15,
-            "low_priority": 5,
-            "by_status": {"Completato": 10, "In sospeso": 12, ...},
-            "by_priority": {"Alta": 5, "Media": 15, "Bassa": 5},
-            "by_category": {"Lavoro": 10, "Personale": 8, ...},
-            "completion_rate": 40.0,
-            "message": "Statistics: 25 total tasks"
-        }
-
     Utile per domande come:
     - "Quanti task ho completato?"
     - "Quanti task ad alta priorità ho?"
     - "Qual è la mia categoria più carica?"
-
-    Example usage:
-        User: "Mostrami le statistiche dei miei task"
-        Bot calls: get_task_stats(authorization="Bearer eyJ...")
-        Bot response: "Hai 25 task totali: 10 completati (40%), 12 in sospeso. 5 sono ad alta priorità."
     """
     user_id = authenticate_from_context(ctx)
 
@@ -236,33 +178,13 @@ async def get_next_due_task(
     ctx: Context,
     limit: int = 1
 ) -> Dict[str, Any]:
-    """
-    Ottieni i PROSSIMI task in scadenza (i task con le date di fine più vicine nel futuro).
+    """Ottieni i PROSSIMI task in scadenza (i task con le date di fine più vicine nel futuro).
 
     Authentication:
         Requires valid JWT token in Authorization header: "Bearer <token>"
 
     Parameters:
     - limit: Numero di task da restituire (default: 1, massimo: 20)
-
-    Returns:
-        For limit=1:
-        {
-            "success": true,
-            "task": {...},  # Il prossimo task
-            "tasks": [{...}],
-            "total_upcoming": 10,
-            "message": "Il prossimo task in scadenza è 'Meeting' il 2025-12-15..."
-        }
-
-        For limit>1:
-        {
-            "success": true,
-            "tasks": [{...}, {...}, ...],
-            "total_upcoming": 10,
-            "returned": 3,
-            "message": "Prossimi 3 task in scadenza (su 10 totali)"
-        }
 
     Perfetto per domande come:
     - "Qual è il prossimo task in scadenza?" (limit=1)
@@ -272,11 +194,6 @@ async def get_next_due_task(
 
     Restituisce i task con le date di scadenza più vicine, indipendentemente da quando siano
     (domani, tra una settimana, o tra un anno).
-
-    Example usage:
-        User: "Qual è il prossimo task in scadenza?"
-        Bot calls: get_next_due_task(authorization="Bearer eyJ...", limit=1)
-        Bot response: "Il prossimo task è 'Meeting' che scade venerdì 15 dicembre alle 10:00"
     """
     user_id = authenticate_from_context(ctx)
 
@@ -343,26 +260,10 @@ async def get_next_due_task(
 
 
 async def get_overdue_tasks(ctx: Context) -> List[Dict[str, Any]]:
-    """
-    Ottieni tutti i task SCADUTI (la data di fine è passata).
+    """Ottieni tutti i task SCADUTI (la data di fine è passata).
 
     Authentication:
         Requires valid JWT token in Authorization header: "Bearer <token>"
-
-    Returns:
-        [
-            {
-                "task_id": 5,
-                "title": "Pagare bolletta",
-                "description": "...",
-                "end_time": "2025-12-10T12:00:00",
-                "category": "Casa",
-                "priority": "Alta",
-                "status": "In sospeso",
-                "days_overdue": 5
-            },
-            ...
-        ]
 
     Perfetto per domande come:
     - "Quali task ho scaduto?"
@@ -370,11 +271,6 @@ async def get_overdue_tasks(ctx: Context) -> List[Dict[str, Any]]:
     - "Mostra i task in ritardo"
 
     I task ritornati sono ordinati per data di scadenza (più vecchi prima).
-
-    Example usage:
-        User: "Mostrami i task scaduti"
-        Bot calls: get_overdue_tasks(authorization="Bearer eyJ...")
-        Bot response: "Hai 3 task scaduti: 'Bolletta' (5 giorni fa), 'Dentista' (2 giorni fa), ..."
     """
     user_id = authenticate_from_context(ctx)
 
@@ -418,8 +314,7 @@ async def get_upcoming_tasks(
     ctx: Context,
     days: int = 7
 ) -> List[Dict[str, Any]]:
-    """
-    Ottieni i task in scadenza nei prossimi N giorni.
+    """Ottieni i task in scadenza nei prossimi N giorni.
 
     Authentication:
         Requires valid JWT token in Authorization header: "Bearer <token>"
@@ -427,32 +322,12 @@ async def get_upcoming_tasks(
     Parameters:
     - days: Numero di giorni da controllare (default: 7)
 
-    Returns:
-        [
-            {
-                "task_id": 10,
-                "title": "Meeting",
-                "description": "...",
-                "end_time": "2025-12-16T10:00:00",
-                "category": "Lavoro",
-                "priority": "Alta",
-                "status": "In sospeso",
-                "days_until_due": 1
-            },
-            ...
-        ]
-
     Perfetto per:
     - "Cosa ho da fare domani?" (days=1)
     - "Quali task scadono questa settimana?" (days=7)
     - "Mostra i prossimi impegni" (days=7)
 
     I task sono ordinati per data di scadenza (più vicini prima).
-
-    Example usage:
-        User: "Cosa ho in programma questa settimana?"
-        Bot calls: get_upcoming_tasks(authorization="Bearer eyJ...", days=7)
-        Bot response: "Questa settimana hai 5 task: 'Meeting' (domani), 'Spesa' (mercoledì), ..."
     """
     user_id = authenticate_from_context(ctx)
 
@@ -505,8 +380,7 @@ async def add_task(
     description: Optional[str] = None,
     priority: str = "Bassa"
 ) -> Dict[str, Any]:
-    """
-    Crea un NUOVO task con gestione intelligente delle categorie.
+    """Crea un NUOVO task con gestione intelligente delle categorie.
 
     Questo è il tool principale per aggiungere task!
 
@@ -535,33 +409,10 @@ async def add_task(
     - End_time: SEMPRE includere l'ora appropriata al contesto (pranzo=12:00, cena=19:00, etc)
     - Se categoria non esiste, ritorna errore con suggerimenti
 
-    Returns:
-        {
-            "success": true,
-            "task": {...},
-            "category_action": "found_exact" | "created",
-            "category_message": "...",
-            "category_used": "Lavoro",
-            "message": "✅ Task 'Meeting' creato con successo in 'Lavoro'",
-            "conflicts": [...],  # Se ci sono conflitti di orario
-            "energy_hint": "..."  # Se l'utente ha menzionato stanchezza
-        }
-
     Esempi di uso CORRETTI:
     - add_task(title="Riunione team", description="Meeting settimanale con il team di sviluppo", end_time="2025-12-15 10:00")
     - add_task(title="Pranzo Marco", description="Pranzo con Marco al ristorante Da Luigi", category_name="Personale", end_time="2025-12-16 12:30")
     - add_task(title="Studiare matematica", description="Studiare 2 ore - Capitoli 5-7", end_time="2025-12-15 16:00")
-
-    Example usage:
-        User: "Aggiungi un task: riunione domani alle 10"
-        Bot calls: add_task(
-            authorization="Bearer eyJ...",
-            title="Riunione",
-            end_time="2025-12-16 10:00",
-            category_name="Lavoro",
-            priority="Alta"
-        )
-        Bot response: "✅ Task 'Riunione' creato per domani alle 10:00 nella categoria 'Lavoro'"
     """
     user_id = authenticate_from_context(ctx)
 
@@ -574,12 +425,35 @@ async def add_task(
             "max_length": 100
         }
 
-    # Create task via FastAPI
+    # Get all categories to find the category_id
     try:
+        categories = await category_client.get_categories(user_id)
+
+        # Find category by name
+        category_id = None
+        category_used = category_name or "Generale"
+
+        for cat in categories:
+            if cat["name"].lower() == category_used.lower():
+                category_id = cat["category_id"]
+                category_used = cat["name"]  # Use exact name from database
+                break
+
+        if category_id is None:
+            # Category not found, return error with suggestions
+            category_names = [cat["name"] for cat in categories[:5]]
+            return {
+                "success": False,
+                "message": f"❌ Categoria '{category_used}' non trovata. Categorie esistenti: {', '.join(category_names)}",
+                "category_suggestions": category_names,
+                "action_required": "ask_user_to_create_category"
+            }
+
+        # Create task via FastAPI with category_id
         result = await task_client.create_task(
             user_id=user_id,
             title=title,
-            category_name=category_name or "Generale",
+            category_id=category_id,
             end_time=end_time,
             start_time=start_time,
             description=description,
@@ -589,25 +463,13 @@ async def add_task(
         return {
             "success": True,
             "task": result,
-            "category_used": category_name or "Generale",
-            "message": f"✅ Task '{title}' creato con successo in '{category_name or 'Generale'}'"
+            "category_used": category_used,
+            "message": f"✅ Task '{title}' creato con successo in '{category_used}'"
         }
     except Exception as e:
         error_msg = str(e)
-        if "category" in error_msg.lower() and "not found" in error_msg.lower():
-            # Get all categories for suggestions
-            categories = await category_client.get_categories(user_id)
-            category_names = [cat["name"] for cat in categories[:5]]
-
-            return {
-                "success": False,
-                "message": f"❌ Categoria '{category_name}' non trovata. Categorie esistenti: {', '.join(category_names)}",
-                "category_suggestions": category_names,
-                "action_required": "ask_user_to_create_category"
-            }
-        else:
-            return {
-                "success": False,
-                "message": f"Failed to create task: {error_msg}",
-                "error": error_msg
-            }
+        return {
+            "success": False,
+            "message": f"Failed to create task: {error_msg}",
+            "error": error_msg
+        }
