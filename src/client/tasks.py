@@ -68,6 +68,7 @@ class TaskClient(BaseClient):
         """
         token = await self._get_user_token(user_id)
         data = {
+            "user": str(user_id),  # FastAPI schema requires 'user' field
             "title": title,
             "category_id": category_id,
             "priority": priority,
