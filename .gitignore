@@ -46,3 +46,5 @@ htmlcov/
 logs/
 
 tests/external/test_openai_agents.py
+
+tests\external\test_category_tools.py
