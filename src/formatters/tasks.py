@@ -83,6 +83,129 @@ def get_category_color(category_name: str) -> str:
     return colors[hash_val % len(colors)]
 
 
+def get_category_icon(category_name: str) -> str:
+    """
+    Get an icon representation for a category based on its name.
+    """
+    if not category_name:
+        return "folder"
+
+    icon_map = {
+        "Lavoro": "briefcase",
+        "Personale": "user",
+        "Studio": "book",
+        "Sport": "activity",
+        "Famiglia": "home",
+        "Cibo": "coffee",
+        "Generale": "folder"
+    }
+    return icon_map.get(category_name, "folder")
+
+
+def format_categories_for_ui(categories: List[Dict[str, Any]], task_counts: Dict[int, int] = None) -> Dict[str, Any]:
+    """
+    Format categories response for React Native UI components.
+
+    Creates a JSON structure optimized for native mobile rendering with:
+    - Color coding for each category
+    - Icons for common categories
+    - Task count per category
+    - UI hints for display configuration
+
+    Args:
+        categories: List of category dictionaries from FastAPI
+        task_counts: Optional dictionary mapping category_id to task count
+
+    Returns:
+        Formatted dictionary with type, categories, columns, summary, and UI hints
+    """
+    formatted_categories = []
+    task_counts = task_counts or {}
+
+    for category in categories:
+        category_id = category.get("category_id")
+        category_name = category.get("name", "Senza nome")
+        task_count = task_counts.get(category_id, 0)
+
+        formatted_category = {
+            "id": category_id,
+            "name": category_name,
+            "description": category.get("description", ""),
+            "color": get_category_color(category_name),
+            "icon": get_category_icon(category_name),
+            "taskCount": task_count,
+            "userId": category.get("user_id"),
+            "actions": {
+                "edit": {
+                    "label": "✏️ Modifica",
+                    "enabled": True
+                },
+                "delete": {
+                    "label": "🗑️ Elimina",
+                    "enabled": True,
+                    "requiresConfirmation": True
+                },
+                "viewTasks": {
+                    "label": "👁️ Vedi task",
+                    "enabled": task_count > 0
+                }
+            }
+        }
+        formatted_categories.append(formatted_category)
+
+    # Calculate summary statistics
+    total = len(formatted_categories)
+    total_tasks = sum(cat["taskCount"] for cat in formatted_categories)
+    categories_with_tasks = sum(1 for cat in formatted_categories if cat["taskCount"] > 0)
+
+    # Create voice summary for TTS
+    voice_summary = f"Hai {total} categorie"
+    if categories_with_tasks > 0:
+        voice_summary += f", di cui {categories_with_tasks} con task attivi"
+    if total_tasks > 0:
+        voice_summary += f". Totale {total_tasks} task"
+    voice_summary += "."
+
+    return {
+        "type": "category_list",
+        "version": "1.0",
+        "columns": [
+            {
+                "id": "name",
+                "label": "Categoria",
+                "width": "50%",
+                "sortable": True
+            },
+            {
+                "id": "taskCount",
+                "label": "Task",
+                "width": "25%",
+                "sortable": True
+            },
+            {
+                "id": "description",
+                "label": "Descrizione",
+                "width": "25%",
+                "sortable": False
+            }
+        ],
+        "categories": formatted_categories,
+        "summary": {
+            "total": total,
+            "categories_with_tasks": categories_with_tasks,
+            "total_tasks": total_tasks
+        },
+        "voice_summary": voice_summary,
+        "ui_hints": {
+            "display_mode": "grid",
+            "enable_swipe_actions": True,
+            "enable_pull_to_refresh": True,
+            "enable_search": True,
+            "default_sort": "name"
+        }
+    }
+
+
 def format_tasks_for_ui(tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Format tasks response for React Native UI components.

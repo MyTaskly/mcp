@@ -24,7 +24,7 @@ class NoteClient(BaseClient):
             - created_at: str
         """
         token = await self._get_user_token(user_id)
-        return await self._get("/notes/", token)
+        return await self._get("/notes", token)
 
     async def create_note(
         self,

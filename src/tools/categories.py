@@ -3,15 +3,16 @@
 from typing import Dict, Any, Optional
 from fastmcp import Context
 from src.auth import authenticate_from_context
-from src.client import category_client
+from src.client import category_client, task_client
+from src.formatters import format_categories_for_ui
 
 
 async def get_my_categories(ctx: Context) -> Dict[str, Any]:
     """
-    Ottieni TUTTE le categorie dell'utente.
+    Ottieni TUTTE le categorie dell'utente per USO INTERNO (lookup, validazione).
 
-    Restituisce l'elenco completo delle categorie create per organizzare i task.
-    Ogni categoria ha un ID unico che puoi usare negli altri tools.
+    Questo tool restituisce dati JSON semplici senza formattazione UI.
+    NON mostra nulla all'utente sullo schermo dell'app.
 
     Authentication:
         Automatic - JWT token extracted from SSE connection headers
@@ -30,15 +31,20 @@ async def get_my_categories(ctx: Context) -> Dict[str, Any]:
             "total": 5
         }
 
-    Utile per:
-    - Vedere come sono organizzati i task
-    - Trovare l'ID di una categoria
-    - Gestire le categorie esistenti
+    QUANDO USARE QUESTO TOOL:
+    - ✅ Trovare category_id da nome categoria prima di creare un task
+    - ✅ Validare che una categoria esista
+    - ✅ Verificare il nome esatto di una categoria
+    - ❌ NON usare quando l'utente chiede "Mostrami le categorie" (usa show_categories_to_user)
+
+    Per MOSTRARE le categorie all'utente, usa show_categories_to_user() invece.
 
     Example usage:
-        User: "Quali categorie ho?"
+        User: "Crea task Riunione in categoria Lavoro"
+        Bot reasoning: "Devo trovare l'ID della categoria Lavoro"
         Bot calls: get_my_categories()
-        Bot response: "Hai 5 categorie: Lavoro, Personale, Studio, Sport, Famiglia"
+        Bot finds: category_id=5 per "Lavoro"
+        Bot calls: add_task(title="Riunione", category_id=5)
     """
     user_id = authenticate_from_context(ctx)
     categories = await category_client.get_categories(user_id)
@@ -68,12 +74,19 @@ async def create_category(
 
     Returns:
         {
-            "category_id": 10,
-            "name": "Progetti",
-            "description": "Progetti personali",
-            "user_id": 123,
-            "message": "Category created successfully"
+            "success": true,
+            "type": "category_created",
+            "message": "✅ Categoria 'Progetti' creata con successo",
+            "category": {
+                "category_id": 10,
+                "name": "Progetti",
+                "description": "Progetti personali",
+                "user_id": 123
+            }
         }
+
+    L'app React Native mostrerà automaticamente un bottone "Modifica categoria"
+    quando riceve type: "category_created".
 
     Utile per:
     - Creare categorie per organizzare meglio i task
@@ -88,8 +101,10 @@ async def create_category(
     result = await category_client.create_category(user_id, name, description)
 
     return {
-        **result,
-        "message": f"Category '{name}' created successfully"
+        "success": True,
+        "type": "category_created",
+        "message": f"✅ Categoria '{name}' creata con successo",
+        "category": result
     }
 
 
@@ -223,3 +238,79 @@ async def search_categories(
         "total_categories": len(categories),
         "message": f"Found {len(similar_categories)} similar categories for '{search_term}'"
     }
+
+
+async def show_categories_to_user(ctx: Context) -> Dict[str, Any]:
+    """
+    MOSTRA le categorie all'utente con formattazione UI completa.
+
+    Questo tool è specificamente per VISUALIZZARE le categorie sullo schermo dell'app mobile.
+    Include formattazione ricca con colori, icone, conteggi task, e configurazione UI.
+
+    Authentication:
+        Automatic - JWT token extracted from SSE connection headers
+
+    Returns:
+        {
+            "type": "category_list",
+            "version": "1.0",
+            "categories": [
+                {
+                    "id": 1,
+                    "name": "Lavoro",
+                    "description": "Task di lavoro",
+                    "color": "#3B82F6",
+                    "icon": "briefcase",
+                    "taskCount": 12,
+                    "actions": {...}
+                },
+                ...
+            ],
+            "summary": {
+                "total": 5,
+                "categories_with_tasks": 3,
+                "total_tasks": 25
+            },
+            "voice_summary": "Hai 5 categorie, di cui 3 con task attivi. Totale 25 task.",
+            "ui_hints": {
+                "display_mode": "grid",
+                "enable_swipe_actions": true,
+                "enable_search": true
+            }
+        }
+
+    QUANDO USARE QUESTO TOOL:
+    - ✅ Utente chiede: "Mostrami le categorie"
+    - ✅ Utente chiede: "Quali categorie ho?"
+    - ✅ Utente chiede: "Fammi vedere le categorie"
+    - ❌ NON usare per lookup interni (usa get_my_categories invece)
+
+    L'app React Native renderizza automaticamente una lista/griglia formattata
+    quando riceve type: "category_list".
+
+    Example usage:
+        User: "Mostrami le mie categorie"
+        Bot calls: show_categories_to_user()
+        Bot response: "Ecco le tue 5 categorie" (l'app mostra la lista formattata)
+    """
+    user_id = authenticate_from_context(ctx)
+
+    # Get categories
+    categories = await category_client.get_categories(user_id)
+
+    # Get all tasks to count per category
+    all_tasks = await task_client.get_tasks(user_id)
+
+    # Count tasks per category
+    task_counts = {}
+    for task in all_tasks:
+        category_info = task.get("category")
+        if category_info and isinstance(category_info, dict):
+            category_id = category_info.get("category_id")
+            if category_id:
+                task_counts[category_id] = task_counts.get(category_id, 0) + 1
+
+    # Format for UI
+    formatted_response = format_categories_for_ui(categories, task_counts)
+
+    return formatted_response

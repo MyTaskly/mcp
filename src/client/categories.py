@@ -22,7 +22,7 @@ class CategoryClient(BaseClient):
             - user_id: int
         """
         token = await self._get_user_token(user_id)
-        return await self._get("/categories/", token)
+        return await self._get("/categories", token)
 
     async def create_category(
         self,
@@ -46,7 +46,7 @@ class CategoryClient(BaseClient):
         if description:
             data["description"] = description
 
-        return await self._post("/categories/", token, json=data)
+        return await self._post("/categories", token, json=data)
 
     async def update_category(
         self,
