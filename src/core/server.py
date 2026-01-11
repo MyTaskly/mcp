@@ -15,7 +15,8 @@ from src.tools.categories import (
     get_my_categories,
     create_category,
     update_category,
-    search_categories
+    search_categories,
+    show_categories_to_user
 )
 
 from src.tools.tasks import (
@@ -49,6 +50,7 @@ mcp.tool()(get_my_categories)
 mcp.tool()(create_category)
 mcp.tool()(update_category)
 mcp.tool()(search_categories)
+mcp.tool()(show_categories_to_user)
 
 # Register task tools
 mcp.tool()(get_tasks)
