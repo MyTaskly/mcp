@@ -15,17 +15,19 @@ async def get_tasks(
     status: Optional[str] = None,
     task_id: Optional[int] = None
 ) -> Dict[str, Any]:
-    """Recupera i task dell'utente con filtri opzionali.
+    """Recupera i task dell'utente per USO INTERNO (lookup, validazione, filtri).
 
-    Returns tasks in a format optimized for React Native components with:
-    - Formatted data ready for mobile UI
-    - Column definitions for table/list rendering
-    - Summary statistics (total, pending, completed, high priority)
-    - Voice summary for TTS
-    - UI hints for display mode and interactions
+    Questo tool restituisce dati JSON semplici senza formattazione UI.
+    NON mostra nulla all'utente sullo schermo dell'app.
 
     Authentication:
         Requires valid JWT token in Authorization header: "Bearer <token>"
+
+    QUANDO USARE QUESTO TOOL:
+    - ✅ Trovare task_id prima di modificare/completare un task
+    - ✅ Filtrare task per categoria/priorità/stato per logica interna
+    - ✅ Verificare se un task esiste
+    - ❌ NON usare quando l'utente chiede "Mostrami i task" (usa show_tasks_to_user)
 
     Usa questo tool per:
     - Ottenere TUTTI i task: non specificare filtri
@@ -41,23 +43,24 @@ async def get_tasks(
     2. Trova la categoria con il nome corrispondente
     3. Usa il category_id trovato per chiamare get_tasks(category_id=X)
 
-    Esempi di uso:
-    - Tutti i task: get_tasks()
-    - Un task specifico: get_tasks(task_id=5)
-    - Task ad alta priorità: get_tasks(priority="Alta")
-    - Task in una categoria (quando conosci l'ID): get_tasks(category_id=3)
-    - Task in una categoria per NOME: PRIMA get_my_categories() → trova ID → POI get_tasks(category_id=ID_trovato)
-    - Task completati in una categoria: get_tasks(category_id=3, status="Completato")
+    Per MOSTRARE i task all'utente, usa show_tasks_to_user() invece.
+
+    Example usage:
+        User: "Completa il task Riunione"
+        Bot reasoning: "Devo trovare l'ID del task Riunione"
+        Bot calls: get_tasks()
+        Bot finds: task_id=12 per "Riunione"
+        Bot calls: complete_task(task_id=12)
     """
     user_id = authenticate_from_context(ctx)
 
     # Fetch tasks from FastAPI
     tasks = await task_client.get_tasks(user_id, category_id, priority, status, task_id)
 
-    # Format for React Native UI
-    formatted_response = format_tasks_for_ui(tasks)
-
-    return formatted_response
+    return {
+        "tasks": tasks,
+        "total": len(tasks)
+    }
 
 
 async def update_task(
@@ -462,9 +465,10 @@ async def add_task(
 
         return {
             "success": True,
+            "type": "task_created",
+            "message": f"✅ Task '{title}' creato con successo in '{category_used}'",
             "task": result,
-            "category_used": category_used,
-            "message": f"✅ Task '{title}' creato con successo in '{category_used}'"
+            "category_used": category_used
         }
     except Exception as e:
         error_msg = str(e)
@@ -473,3 +477,84 @@ async def add_task(
             "message": f"Failed to create task: {error_msg}",
             "error": error_msg
         }
+
+
+async def show_tasks_to_user(
+    ctx: Context,
+    category_id: Optional[int] = None,
+    priority: Optional[str] = None,
+    status: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    MOSTRA i task all'utente con formattazione UI completa.
+
+    Questo tool è specificamente per VISUALIZZARE i task sullo schermo dell'app mobile.
+    Include formattazione ricca con colori, date formattate, pulsanti azioni, e configurazione UI.
+
+    Authentication:
+        Requires valid JWT token in Authorization header: "Bearer <token>"
+
+    Parameters:
+    - category_id: Filtra per categoria (opzionale)
+    - priority: Filtra per priorità ("Alta", "Media", "Bassa") (opzionale)
+    - status: Filtra per stato ("In sospeso", "Completato", "Annullato") (opzionale)
+
+    Returns:
+        {
+            "type": "task_list",
+            "version": "1.0",
+            "tasks": [
+                {
+                    "id": 1,
+                    "title": "Riunione team",
+                    "description": "Meeting settimanale",
+                    "endTime": "2025-12-15T10:00:00",
+                    "endTimeFormatted": "Lunedì 15 dicembre, 10:00",
+                    "category": "Lavoro",
+                    "categoryColor": "#3B82F6",
+                    "priority": "Alta",
+                    "priorityEmoji": "[!]",
+                    "priorityColor": "#EF4444",
+                    "status": "In sospeso",
+                    "actions": {...}
+                },
+                ...
+            ],
+            "summary": {
+                "total": 10,
+                "pending": 6,
+                "completed": 4,
+                "high_priority": 2
+            },
+            "voice_summary": "Hai 10 task, di cui 2 ad alta priorità. 6 sono in sospeso e 4 completati.",
+            "ui_hints": {
+                "display_mode": "list",
+                "enable_swipe_actions": true,
+                "group_by": "category"
+            }
+        }
+
+    QUANDO USARE QUESTO TOOL:
+    - ✅ Utente chiede: "Mostrami i task"
+    - ✅ Utente chiede: "Quali task ho?"
+    - ✅ Utente chiede: "Fammi vedere i miei impegni"
+    - ✅ Utente chiede: "Mostra i task di categoria Lavoro"
+    - ❌ NON usare per lookup interni (usa get_tasks invece)
+
+    L'app React Native renderizza automaticamente una lista formattata
+    quando riceve type: "task_list".
+
+    Example usage:
+        User: "Mostrami i miei task"
+        Bot calls: show_tasks_to_user()
+        Bot response: "Ecco i tuoi 10 task" (l'app mostra la lista formattata)
+    """
+    user_id = authenticate_from_context(ctx)
+
+    # Get tasks with optional filters
+    tasks = await task_client.get_tasks(user_id, category_id, priority, status)
+
+    # Format for UI
+    formatted_response = format_tasks_for_ui(tasks)
+
+    return formatted_response
