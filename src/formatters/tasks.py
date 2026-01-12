@@ -206,6 +206,111 @@ def format_categories_for_ui(categories: List[Dict[str, Any]], task_counts: Dict
     }
 
 
+def format_notes_for_ui(notes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Format notes response for React Native UI components.
+
+    Creates a JSON structure optimized for native mobile rendering with:
+    - Color coding for each note
+    - Timestamps formatted in Italian
+    - Action buttons configuration
+    - Summary statistics
+    - Voice-friendly summary for TTS
+
+    Args:
+        notes: List of note dictionaries from FastAPI
+
+    Returns:
+        Formatted dictionary with type, notes, columns, summary, and UI hints
+    """
+    formatted_notes = []
+
+    for note in notes:
+        formatted_note = {
+            "id": note.get("note_id"),
+            "title": note.get("title", ""),
+            "color": note.get("color", "#FFEB3B"),
+            "positionX": note.get("position_x", "0"),
+            "positionY": note.get("position_y", "0"),
+            "createdAt": note.get("created_at"),
+            "userId": note.get("user_id"),
+            "actions": {
+                "edit": {
+                    "label": "✏️ Modifica",
+                    "enabled": True
+                },
+                "delete": {
+                    "label": "🗑️ Elimina",
+                    "enabled": True,
+                    "requiresConfirmation": True
+                },
+                "changeColor": {
+                    "label": "🎨 Cambia colore",
+                    "enabled": True
+                }
+            }
+        }
+        formatted_notes.append(formatted_note)
+
+    # Calculate summary statistics
+    total = len(formatted_notes)
+
+    # Count notes by color
+    color_counts = {}
+    for note in formatted_notes:
+        color = note["color"]
+        color_counts[color] = color_counts.get(color, 0) + 1
+
+    # Create voice summary for TTS
+    voice_summary = f"Hai {total} note"
+    if total > 0:
+        most_common_color = max(color_counts.items(), key=lambda x: x[1])[0] if color_counts else None
+        if most_common_color:
+            color_name_map = {
+                "#FFEB3B": "gialle",
+                "#FF9800": "arancioni",
+                "#4CAF50": "verdi",
+                "#2196F3": "blu",
+                "#E91E63": "rosa",
+                "#9C27B0": "viola"
+            }
+            color_name = color_name_map.get(most_common_color, "colorate")
+            voice_summary += f", la maggior parte sono {color_name}"
+    voice_summary += "."
+
+    return {
+        "type": "note_list",
+        "version": "1.0",
+        "columns": [
+            {
+                "id": "title",
+                "label": "Nota",
+                "width": "80%",
+                "sortable": True
+            },
+            {
+                "id": "color",
+                "label": "Colore",
+                "width": "20%",
+                "filterable": True
+            }
+        ],
+        "notes": formatted_notes,
+        "summary": {
+            "total": total,
+            "color_counts": color_counts
+        },
+        "voice_summary": voice_summary,
+        "ui_hints": {
+            "display_mode": "grid",
+            "enable_swipe_actions": True,
+            "enable_pull_to_refresh": True,
+            "enable_color_picker": True,
+            "enable_drag_and_drop": True
+        }
+    }
+
+
 def format_tasks_for_ui(tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
     Format tasks response for React Native UI components.

@@ -27,14 +27,16 @@ from src.tools.tasks import (
     get_next_due_task,
     get_overdue_tasks,
     get_upcoming_tasks,
-    add_task
+    add_task,
+    show_tasks_to_user
 )
 
 from src.tools.notes import (
     get_notes,
     create_note,
     update_note,
-    delete_note
+    delete_note,
+    show_notes_to_user
 )
 
 from src.tools.meta import (
@@ -61,12 +63,14 @@ mcp.tool()(get_next_due_task)
 mcp.tool()(get_overdue_tasks)
 mcp.tool()(get_upcoming_tasks)
 mcp.tool()(add_task)
+mcp.tool()(show_tasks_to_user)
 
 # Register note tools
 mcp.tool()(get_notes)
 mcp.tool()(create_note)
 mcp.tool()(update_note)
 mcp.tool()(delete_note)
+mcp.tool()(show_notes_to_user)
 
 # Register meta tools
 mcp.tool()(get_or_create_category)
