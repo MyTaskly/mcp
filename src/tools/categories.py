@@ -240,6 +240,153 @@ async def search_categories(
     }
 
 
+async def show_category_details(
+    ctx: Context,
+    category_name: Optional[str] = None,
+    category_id: Optional[int] = None
+) -> Dict[str, Any]:
+    """
+    MOSTRA i dettagli di UNA SINGOLA categoria all'utente con formattazione UI completa.
+
+    Questo tool è specificamente per VISUALIZZARE una categoria specifica sullo schermo dell'app mobile.
+    Include tutti i dettagli della categoria, conteggio task, e statistiche.
+
+    Authentication:
+        Automatic - JWT token extracted from SSE connection headers
+
+    Parameters:
+    - category_name: Nome della categoria da visualizzare (es: "Lavoro") (opzionale)
+    - category_id: ID della categoria da visualizzare (opzionale, alternativo a category_name)
+
+    Nota: Specifica category_name OPPURE category_id, non entrambi.
+
+    Returns:
+        {
+            "type": "category_details",
+            "version": "1.0",
+            "category": {
+                "id": 1,
+                "name": "Lavoro",
+                "description": "Task di lavoro",
+                "taskCount": 12,
+                "userId": 123,
+                "actions": {...}
+            },
+            "task_breakdown": {
+                "pending": 8,
+                "completed": 3,
+                "cancelled": 1,
+                "high_priority": 4,
+                "medium_priority": 5,
+                "low_priority": 3
+            },
+            "voice_summary": "Categoria Lavoro con 12 task, di cui 8 in sospeso e 4 ad alta priorità.",
+            "ui_hints": {
+                "enable_edit": true,
+                "enable_view_tasks": true
+            }
+        }
+
+    QUANDO USARE QUESTO TOOL:
+    - ✅ Utente chiede: "Mostrami la categoria Lavoro"
+    - ✅ Utente chiede: "Dettagli della categoria Personale"
+    - ✅ Utente chiede: "Fammi vedere i dettagli di Lavoro"
+    - ❌ NON usare per vedere tutte le categorie (usa show_categories_to_user)
+
+    L'app React Native renderizza automaticamente una vista dettagliata
+    quando riceve type: "category_details".
+
+    Example usage:
+        User: "Mostrami i dettagli della categoria Lavoro"
+        Bot calls: show_category_details(category_name="Lavoro")
+        Bot response: "Ecco i dettagli della categoria Lavoro" (l'app mostra la vista dettagliata)
+    """
+    user_id = authenticate_from_context(ctx)
+
+    # Get all categories
+    categories = await category_client.get_categories(user_id)
+
+    # Find the specific category
+    selected_category = None
+    if category_name:
+        for cat in categories:
+            if cat["name"].lower() == category_name.lower():
+                selected_category = cat
+                break
+    elif category_id:
+        for cat in categories:
+            if cat["category_id"] == category_id:
+                selected_category = cat
+                break
+
+    if not selected_category:
+        search_term = category_name or str(category_id)
+        return {
+            "type": "category_details",
+            "version": "1.0",
+            "error": f"Categoria '{search_term}' non trovata",
+            "voice_summary": f"Categoria {search_term} non trovata"
+        }
+
+    # Get all tasks for this category
+    cat_id = selected_category["category_id"]
+    all_tasks = await task_client.get_tasks(user_id, category_id=cat_id)
+
+    # Calculate task breakdown
+    task_breakdown = {
+        "pending": sum(1 for t in all_tasks if t.get("status") == "In sospeso"),
+        "completed": sum(1 for t in all_tasks if t.get("status") == "Completato"),
+        "cancelled": sum(1 for t in all_tasks if t.get("status") == "Annullato"),
+        "high_priority": sum(1 for t in all_tasks if t.get("priority") == "Alta"),
+        "medium_priority": sum(1 for t in all_tasks if t.get("priority") == "Media"),
+        "low_priority": sum(1 for t in all_tasks if t.get("priority") == "Bassa")
+    }
+
+    task_count = len(all_tasks)
+    cat_name = selected_category["name"]
+
+    # Create voice summary
+    voice_summary = f"Categoria {cat_name} con {task_count} task"
+    if task_breakdown["pending"] > 0:
+        voice_summary += f", di cui {task_breakdown['pending']} in sospeso"
+    if task_breakdown["high_priority"] > 0:
+        voice_summary += f" e {task_breakdown['high_priority']} ad alta priorità"
+    voice_summary += "."
+
+    return {
+        "type": "category_details",
+        "version": "1.0",
+        "category": {
+            "id": cat_id,
+            "name": cat_name,
+            "description": selected_category.get("description", ""),
+            "taskCount": task_count,
+            "userId": selected_category.get("user_id"),
+            "actions": {
+                "edit": {
+                    "label": "✏️ Modifica",
+                    "enabled": True
+                },
+                "delete": {
+                    "label": "🗑️ Elimina",
+                    "enabled": True,
+                    "requiresConfirmation": True
+                },
+                "viewTasks": {
+                    "label": "👁️ Vedi task",
+                    "enabled": task_count > 0
+                }
+            }
+        },
+        "task_breakdown": task_breakdown,
+        "voice_summary": voice_summary,
+        "ui_hints": {
+            "enable_edit": True,
+            "enable_view_tasks": task_count > 0
+        }
+    }
+
+
 async def show_categories_to_user(ctx: Context) -> Dict[str, Any]:
     """
     MOSTRA le categorie all'utente con formattazione UI completa.

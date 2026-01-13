@@ -131,8 +131,6 @@ def format_categories_for_ui(categories: List[Dict[str, Any]], task_counts: Dict
             "id": category_id,
             "name": category_name,
             "description": category.get("description", ""),
-            "color": get_category_color(category_name),
-            "icon": get_category_icon(category_name),
             "taskCount": task_count,
             "userId": category.get("user_id"),
             "actions": {
@@ -343,10 +341,7 @@ def format_tasks_for_ui(tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
             "endTimeFormatted": format_date_for_mobile(task.get("end_time")) if task.get("end_time") else None,
             "startTime": task.get("start_time"),
             "category": category_name,
-            "categoryColor": get_category_color(category_name),
             "priority": priority,
-            "priorityEmoji": get_priority_emoji(priority),
-            "priorityColor": get_priority_color(priority),
             "status": task.get("status", "In sospeso"),
             "actions": {
                 "complete": {

@@ -483,21 +483,31 @@ async def show_tasks_to_user(
     ctx: Context,
     category_id: Optional[int] = None,
     priority: Optional[str] = None,
-    status: Optional[str] = None
+    status: Optional[str] = None,
+    due_date: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    MOSTRA i task all'utente con formattazione UI completa.
+    MOSTRA i task all'utente con formattazione UI completa e filtri avanzati.
 
     Questo tool è specificamente per VISUALIZZARE i task sullo schermo dell'app mobile.
-    Include formattazione ricca con colori, date formattate, pulsanti azioni, e configurazione UI.
+    Include formattazione ricca con date formattate, pulsanti azioni, e configurazione UI.
 
     Authentication:
         Requires valid JWT token in Authorization header: "Bearer <token>"
 
     Parameters:
-    - category_id: Filtra per categoria (opzionale)
+    - category_id: Filtra per ID categoria (opzionale)
     - priority: Filtra per priorità ("Alta", "Media", "Bassa") (opzionale)
     - status: Filtra per stato ("In sospeso", "Completato", "Annullato") (opzionale)
+    - due_date: Filtra per data di scadenza specifica (formato: "YYYY-MM-DD") (opzionale)
+    - start_date: Filtra task con scadenza >= start_date (formato: "YYYY-MM-DD") (opzionale)
+    - end_date: Filtra task con scadenza <= end_date (formato: "YYYY-MM-DD") (opzionale)
+
+    Note sui filtri:
+    - Usa due_date per una data specifica, OPPURE start_date/end_date per un range
+    - I filtri possono essere combinati (es: categoria + priorità + range date)
 
     Returns:
         {
@@ -511,15 +521,17 @@ async def show_tasks_to_user(
                     "endTime": "2025-12-15T10:00:00",
                     "endTimeFormatted": "Lunedì 15 dicembre, 10:00",
                     "category": "Lavoro",
-                    "categoryColor": "#3B82F6",
                     "priority": "Alta",
-                    "priorityEmoji": "[!]",
-                    "priorityColor": "#EF4444",
                     "status": "In sospeso",
                     "actions": {...}
                 },
                 ...
             ],
+            "filters_applied": {
+                "category_id": 1,
+                "priority": "Alta",
+                "date_range": "2025-12-01 to 2025-12-31"
+            },
             "summary": {
                 "total": 10,
                 "pending": 6,
@@ -539,22 +551,88 @@ async def show_tasks_to_user(
     - ✅ Utente chiede: "Quali task ho?"
     - ✅ Utente chiede: "Fammi vedere i miei impegni"
     - ✅ Utente chiede: "Mostra i task di categoria Lavoro"
+    - ✅ Utente chiede: "Mostra i task ad alta priorità di questa settimana"
+    - ✅ Utente chiede: "Fammi vedere i task che scadono il 15 dicembre"
     - ❌ NON usare per lookup interni (usa get_tasks invece)
 
     L'app React Native renderizza automaticamente una lista formattata
     quando riceve type: "task_list".
 
     Example usage:
-        User: "Mostrami i miei task"
-        Bot calls: show_tasks_to_user()
-        Bot response: "Ecco i tuoi 10 task" (l'app mostra la lista formattata)
+        User: "Mostrami i task ad alta priorità"
+        Bot calls: show_tasks_to_user(priority="Alta")
+        Bot response: "Ecco i tuoi task ad alta priorità" (l'app mostra la lista filtrata)
+
+        User: "Mostra i task che scadono questa settimana"
+        Bot calls: show_tasks_to_user(start_date="2025-12-13", end_date="2025-12-19")
+        Bot response: "Ecco i task che scadono questa settimana" (l'app mostra la lista filtrata)
     """
     user_id = authenticate_from_context(ctx)
 
     # Get tasks with optional filters
     tasks = await task_client.get_tasks(user_id, category_id, priority, status)
 
+    # Apply date filters
+    if due_date or start_date or end_date:
+        from datetime import datetime, timezone
+        filtered_tasks = []
+
+        for task in tasks:
+            end_time_str = task.get("end_time")
+            if not end_time_str:
+                continue
+
+            try:
+                end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
+                if end_time.tzinfo is None:
+                    end_time = end_time.replace(tzinfo=timezone.utc)
+
+                task_date = end_time.date()
+
+                # Filter by specific due_date
+                if due_date:
+                    filter_date = datetime.fromisoformat(due_date).date()
+                    if task_date == filter_date:
+                        filtered_tasks.append(task)
+                # Filter by date range
+                elif start_date or end_date:
+                    include_task = True
+
+                    if start_date:
+                        filter_start = datetime.fromisoformat(start_date).date()
+                        if task_date < filter_start:
+                            include_task = False
+
+                    if end_date and include_task:
+                        filter_end = datetime.fromisoformat(end_date).date()
+                        if task_date > filter_end:
+                            include_task = False
+
+                    if include_task:
+                        filtered_tasks.append(task)
+            except Exception:
+                continue
+
+        tasks = filtered_tasks
+
     # Format for UI
     formatted_response = format_tasks_for_ui(tasks)
+
+    # Add filters_applied metadata
+    filters_applied = {}
+    if category_id:
+        filters_applied["category_id"] = category_id
+    if priority:
+        filters_applied["priority"] = priority
+    if status:
+        filters_applied["status"] = status
+    if due_date:
+        filters_applied["due_date"] = due_date
+    if start_date or end_date:
+        date_range = f"{start_date or 'start'} to {end_date or 'end'}"
+        filters_applied["date_range"] = date_range
+
+    if filters_applied:
+        formatted_response["filters_applied"] = filters_applied
 
     return formatted_response
