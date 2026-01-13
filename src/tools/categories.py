@@ -269,8 +269,7 @@ async def show_category_details(
                 "name": "Lavoro",
                 "description": "Task di lavoro",
                 "taskCount": 12,
-                "userId": 123,
-                "actions": {...}
+                "userId": 123
             },
             "task_breakdown": {
                 "pending": 8,
@@ -361,22 +360,7 @@ async def show_category_details(
             "name": cat_name,
             "description": selected_category.get("description", ""),
             "taskCount": task_count,
-            "userId": selected_category.get("user_id"),
-            "actions": {
-                "edit": {
-                    "label": "✏️ Modifica",
-                    "enabled": True
-                },
-                "delete": {
-                    "label": "🗑️ Elimina",
-                    "enabled": True,
-                    "requiresConfirmation": True
-                },
-                "viewTasks": {
-                    "label": "👁️ Vedi task",
-                    "enabled": task_count > 0
-                }
-            }
+            "userId": selected_category.get("user_id")
         },
         "task_breakdown": task_breakdown,
         "voice_summary": voice_summary,
@@ -406,10 +390,7 @@ async def show_categories_to_user(ctx: Context) -> Dict[str, Any]:
                     "id": 1,
                     "name": "Lavoro",
                     "description": "Task di lavoro",
-                    "color": "#3B82F6",
-                    "icon": "briefcase",
-                    "taskCount": 12,
-                    "actions": {...}
+                    "taskCount": 12
                 },
                 ...
             ],

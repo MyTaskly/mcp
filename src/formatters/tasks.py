@@ -132,22 +132,7 @@ def format_categories_for_ui(categories: List[Dict[str, Any]], task_counts: Dict
             "name": category_name,
             "description": category.get("description", ""),
             "taskCount": task_count,
-            "userId": category.get("user_id"),
-            "actions": {
-                "edit": {
-                    "label": "✏️ Modifica",
-                    "enabled": True
-                },
-                "delete": {
-                    "label": "🗑️ Elimina",
-                    "enabled": True,
-                    "requiresConfirmation": True
-                },
-                "viewTasks": {
-                    "label": "👁️ Vedi task",
-                    "enabled": task_count > 0
-                }
-            }
+            "userId": category.get("user_id")
         }
         formatted_categories.append(formatted_category)
 
@@ -231,22 +216,7 @@ def format_notes_for_ui(notes: List[Dict[str, Any]]) -> Dict[str, Any]:
             "positionX": note.get("position_x", "0"),
             "positionY": note.get("position_y", "0"),
             "createdAt": note.get("created_at"),
-            "userId": note.get("user_id"),
-            "actions": {
-                "edit": {
-                    "label": "✏️ Modifica",
-                    "enabled": True
-                },
-                "delete": {
-                    "label": "🗑️ Elimina",
-                    "enabled": True,
-                    "requiresConfirmation": True
-                },
-                "changeColor": {
-                    "label": "🎨 Cambia colore",
-                    "enabled": True
-                }
-            }
+            "userId": note.get("user_id")
         }
         formatted_notes.append(formatted_note)
 

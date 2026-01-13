@@ -522,8 +522,7 @@ async def show_tasks_to_user(
                     "endTimeFormatted": "Lunedì 15 dicembre, 10:00",
                     "category": "Lavoro",
                     "priority": "Alta",
-                    "status": "In sospeso",
-                    "actions": {...}
+                    "status": "In sospeso"
                 },
                 ...
             ],
