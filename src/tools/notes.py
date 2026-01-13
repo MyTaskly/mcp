@@ -251,8 +251,7 @@ async def show_notes_to_user(ctx: Context) -> Dict[str, Any]:
                     "color": "#FFEB3B",
                     "positionX": "0",
                     "positionY": "0",
-                    "createdAt": "2025-12-15T10:30:00",
-                    "actions": {...}
+                    "createdAt": "2025-12-15T10:30:00"
                 },
                 ...
             ],

@@ -131,25 +131,8 @@ def format_categories_for_ui(categories: List[Dict[str, Any]], task_counts: Dict
             "id": category_id,
             "name": category_name,
             "description": category.get("description", ""),
-            "color": get_category_color(category_name),
-            "icon": get_category_icon(category_name),
             "taskCount": task_count,
-            "userId": category.get("user_id"),
-            "actions": {
-                "edit": {
-                    "label": "✏️ Modifica",
-                    "enabled": True
-                },
-                "delete": {
-                    "label": "🗑️ Elimina",
-                    "enabled": True,
-                    "requiresConfirmation": True
-                },
-                "viewTasks": {
-                    "label": "👁️ Vedi task",
-                    "enabled": task_count > 0
-                }
-            }
+            "userId": category.get("user_id")
         }
         formatted_categories.append(formatted_category)
 
@@ -233,22 +216,7 @@ def format_notes_for_ui(notes: List[Dict[str, Any]]) -> Dict[str, Any]:
             "positionX": note.get("position_x", "0"),
             "positionY": note.get("position_y", "0"),
             "createdAt": note.get("created_at"),
-            "userId": note.get("user_id"),
-            "actions": {
-                "edit": {
-                    "label": "✏️ Modifica",
-                    "enabled": True
-                },
-                "delete": {
-                    "label": "🗑️ Elimina",
-                    "enabled": True,
-                    "requiresConfirmation": True
-                },
-                "changeColor": {
-                    "label": "🎨 Cambia colore",
-                    "enabled": True
-                }
-            }
+            "userId": note.get("user_id")
         }
         formatted_notes.append(formatted_note)
 
@@ -343,25 +311,8 @@ def format_tasks_for_ui(tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
             "endTimeFormatted": format_date_for_mobile(task.get("end_time")) if task.get("end_time") else None,
             "startTime": task.get("start_time"),
             "category": category_name,
-            "categoryColor": get_category_color(category_name),
             "priority": priority,
-            "priorityEmoji": get_priority_emoji(priority),
-            "priorityColor": get_priority_color(priority),
-            "status": task.get("status", "In sospeso"),
-            "actions": {
-                "complete": {
-                    "label": "[OK] Completa",
-                    "enabled": task.get("status") != "Completato"
-                },
-                "edit": {
-                    "label": "✏️ Modifica",
-                    "enabled": True
-                },
-                "delete": {
-                    "label": "🗑️ Elimina",
-                    "enabled": True
-                }
-            }
+            "status": task.get("status", "In sospeso")
         }
         formatted_tasks.append(formatted_task)
 
