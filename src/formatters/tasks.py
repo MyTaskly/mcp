@@ -342,21 +342,7 @@ def format_tasks_for_ui(tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
             "startTime": task.get("start_time"),
             "category": category_name,
             "priority": priority,
-            "status": task.get("status", "In sospeso"),
-            "actions": {
-                "complete": {
-                    "label": "[OK] Completa",
-                    "enabled": task.get("status") != "Completato"
-                },
-                "edit": {
-                    "label": "✏️ Modifica",
-                    "enabled": True
-                },
-                "delete": {
-                    "label": "🗑️ Elimina",
-                    "enabled": True
-                }
-            }
+            "status": task.get("status", "In sospeso")
         }
         formatted_tasks.append(formatted_task)
 
