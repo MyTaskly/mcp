@@ -93,8 +93,10 @@ async def update_task(
     - description: Nuova descrizione (opzionale)
     - start_time: Data/ora inizio (formato: YYYY-MM-DD HH:MM:SS) (opzionale)
     - end_time: Data/ora scadenza (formato: YYYY-MM-DD HH:MM:SS) (opzionale)
-    - priority: Nuova priorità ("Alta", "Media", "Bassa") (opzionale)
-    - status: Nuovo stato ("In sospeso", "Completato", "Annullato") (opzionale)
+    - priority: Nuova priorità - USA ESATTAMENTE uno di: "Alta", "Media", "Bassa" (opzionale)
+    - status: Nuovo stato - USA ESATTAMENTE uno di: "In sospeso", "Completato", "Annullato" (opzionale)
+      ❌ NON usare valori inglesi come "completed", "pending", "cancelled"
+      ✅ SEMPRE usare i valori italiani esatti: "Completato", "In sospeso", "Annullato"
 
     Nota: Specifica solo i campi che vuoi modificare. I campi non specificati mantengono il valore attuale.
 

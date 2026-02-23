@@ -3,6 +3,54 @@
 from typing import Dict, Any, List, Optional
 from .base import BaseClient
 
+# Mapping per normalizzare i valori di stato (inglese/case-insensitive → italiano)
+_STATO_ALIASES: dict[str, str] = {
+    "pending": "In sospeso",
+    "in progress": "In sospeso",
+    "in_progress": "In sospeso",
+    "open": "In sospeso",
+    "todo": "In sospeso",
+    "completed": "Completato",
+    "complete": "Completato",
+    "done": "Completato",
+    "finished": "Completato",
+    "cancelled": "Annullato",
+    "canceled": "Annullato",
+    "cancel": "Annullato",
+    "abandoned": "Annullato",
+    "in sospeso": "In sospeso",
+    "sospeso": "In sospeso",
+    "completato": "Completato",
+    "annullato": "Annullato",
+}
+
+# Mapping per normalizzare i valori di priorità
+_PRIORITA_ALIASES: dict[str, str] = {
+    "low": "Bassa",
+    "medium": "Media",
+    "normal": "Media",
+    "high": "Alta",
+    "critical": "Alta",
+    "urgent": "Alta",
+    "bassa": "Bassa",
+    "media": "Media",
+    "alta": "Alta",
+}
+
+
+def _normalize_status(value: Optional[str]) -> Optional[str]:
+    """Normalizza un valore di stato a quello atteso dall'API."""
+    if value is None:
+        return None
+    return _STATO_ALIASES.get(value.lower().strip(), value)
+
+
+def _normalize_priority(value: Optional[str]) -> Optional[str]:
+    """Normalizza un valore di priorità a quello atteso dall'API."""
+    if value is None:
+        return None
+    return _PRIORITA_ALIASES.get(value.lower().strip(), value)
+
 
 class TaskClient(BaseClient):
     """Client for task management endpoints."""
@@ -72,7 +120,7 @@ class TaskClient(BaseClient):
             "title": title,
             "description": description if description else "",  # Always send description (FastAPI requires it)
             "category_id": category_id,
-            "priority": priority,
+            "priority": _normalize_priority(priority),
             "status": "In sospeso"
         }
         if end_time:
@@ -120,9 +168,9 @@ class TaskClient(BaseClient):
         if end_time is not None:
             data["end_time"] = end_time
         if priority is not None:
-            data["priority"] = priority
+            data["priority"] = _normalize_priority(priority)
         if status is not None:
-            data["status"] = status
+            data["status"] = _normalize_status(status)
 
         return await self._put(f"/tasks/{task_id}", token, json=data)
 
