@@ -1,12 +1,15 @@
 """OAuth 2.1 JWT authentication middleware for MCP Server."""
 
 import jwt
+import logging
 from typing import Optional
 from datetime import datetime, timezone
 from fastapi import HTTPException, Header
 from fastmcp import Context
 from fastmcp.server.dependencies import get_http_request
 from src.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class AuthenticationError(Exception):
@@ -72,8 +75,6 @@ def verify_jwt_token(authorization: Optional[str] = Header(None)) -> int:
     Raises:
         HTTPException: If token is missing, invalid, or expired
     """
-    print(f"[DEBUG] verify_jwt_token called with: {repr(authorization)}")
-
     if not authorization:
         raise HTTPException(
             status_code=401,
@@ -89,21 +90,6 @@ def verify_jwt_token(authorization: Optional[str] = Header(None)) -> int:
         )
 
     token = authorization.replace("Bearer ", "").strip()
-
-    # Debug: Log token details
-    print(f"[DEBUG] ========== TOKEN VALIDATION START ==========")
-    print(f"[DEBUG] Authorization string length: {len(authorization)}")
-    print(f"[DEBUG] Extracted token length: {len(token)}")
-    print(f"[DEBUG] Token parts count: {len(token.split('.'))}")
-    print(f"[DEBUG] First 20 chars: {token[:20]}")
-    print(f"[DEBUG] Last 20 chars: {token[-20:]}")
-    print(f"[DEBUG] Expected minimum length: 200 chars")
-
-    if len(token) < 200:
-        print(f"[DEBUG] WARNING: Token is too short! Expected 300+, got {len(token)}")
-        print(f"[DEBUG] Full token received: {token}")
-
-    print(f"[DEBUG] ========== TOKEN VALIDATION END ============")
 
     try:
         # Decode and validate JWT
@@ -137,7 +123,7 @@ def verify_jwt_token(authorization: Optional[str] = Header(None)) -> int:
                 raise AuthenticationError(f"Invalid issuer: {payload['iss']}")
 
         # Optional: Log successful authentication
-        print(f"OK Authenticated user_id={user_id} with token scope: {payload.get('scope', 'N/A')}")
+        logger.info(f"Authenticated user_id={user_id}")
 
         return user_id
 
@@ -177,7 +163,7 @@ def verify_jwt_token(authorization: Optional[str] = Header(None)) -> int:
         )
 
     except Exception as e:
-        print(f"ERROR Unexpected authentication error: {e}")
+        logger.error(f"Unexpected authentication error: {e}")
         raise HTTPException(
             status_code=401,
             detail="Authentication failed",
