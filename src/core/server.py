@@ -103,7 +103,7 @@ mcp.tool()(log_tool(complete_task))
 mcp.tool()(log_tool(get_task_stats))
 mcp.tool()(log_tool(get_next_due_task))
 mcp.tool()(log_tool(get_overdue_tasks))
-mcp.tool()(log_tool(get_upcoming_tasks))
+mcp.tool()(log_tool(get_upcoming_tasks)) # unire con get_next_due_task
 mcp.tool()(log_tool(add_task))
 mcp.tool()(log_tool(show_tasks_to_user))
 
@@ -117,7 +117,7 @@ mcp.tool()(log_tool(show_notes_to_user))
 # Register meta tools
 mcp.tool()(log_tool(get_or_create_category))
 mcp.tool()(log_tool(move_all_tasks_between_categories))
-mcp.tool()(log_tool(add_multiple_tasks))
+# mcp.tool()(log_tool(add_multiple_tasks))
 
 # Register health check (no auth required)
-mcp.tool()(log_tool(health_check))
+# mcp.tool()(log_tool(health_check))
