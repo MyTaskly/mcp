@@ -68,8 +68,8 @@ async def update_task(
     task_id: int,
     title: Optional[str] = None,
     description: Optional[str] = None,
-    start_time: Optional[str] = None,
     end_time: Optional[str] = None,
+    duration_minutes: Optional[int] = None,
     priority: Optional[str] = None,
     status: Optional[str] = None
 ) -> Dict[str, Any]:
@@ -91,8 +91,9 @@ async def update_task(
     - task_id: ID del task da modificare (OBBLIGATORIO - ottienilo con get_tasks!)
     - title: Nuovo titolo del task (opzionale)
     - description: Nuova descrizione (opzionale)
-    - start_time: Data/ora inizio (formato: YYYY-MM-DD HH:MM:SS) (opzionale)
-    - end_time: Data/ora scadenza (formato: YYYY-MM-DD HH:MM:SS) (opzionale)
+    - end_time: Data/ora scadenza - formato "YYYY-MM-DD HH:MM:SS" nella timezone locale
+      dell'utente (già nota dal system prompt). Il server converte automaticamente in UTC.
+    - duration_minutes: Durata in minuti (1-10080, opzionale)
     - priority: Nuova priorità - USA ESATTAMENTE uno di: "Alta", "Media", "Bassa" (opzionale)
     - status: Nuovo stato - USA ESATTAMENTE uno di: "In sospeso", "Completato", "Annullato" (opzionale)
       ❌ NON usare valori inglesi come "completed", "pending", "cancelled"
@@ -111,8 +112,8 @@ async def update_task(
         task_id=task_id,
         title=title,
         description=description,
-        start_time=start_time,
         end_time=end_time,
+        duration_minutes=duration_minutes,
         priority=priority,
         status=status
     )
@@ -381,7 +382,7 @@ async def add_task(
     title: str,
     category_name: str = "Generale",
     end_time: Optional[str] = None,
-    start_time: Optional[str] = None,
+    duration_minutes: Optional[int] = None,
     description: Optional[str] = None,
     priority: str = "Bassa"
 ) -> Dict[str, Any]:
@@ -395,8 +396,11 @@ async def add_task(
     Parameters:
     - title: Titolo del task (OBBLIGATORIO, MAX 100 caratteri, BREVE E CONCISO)
     - category_name: Categoria (default: "Generale"). DEVE ESISTERE - non crea categorie automaticamente
-    - end_time: Scadenza con ORA (formato: "YYYY-MM-DD HH:MM:SS" o "YYYY-MM-DD HH:MM")
-    - start_time: Inizio del task (opzionale, per calcolo durata)
+    - end_time: Scadenza con ORA - formato "YYYY-MM-DD HH:MM:SS" nella timezone locale dell'utente
+      (già nota dal system prompt come {user_timezone}). Il server converte automaticamente in UTC.
+      SEMPRE includere l'ora appropriata al contesto (riunione mattina=10:00, pranzo=12:00, cena=19:00, etc.)
+    - duration_minutes: Durata prevista in minuti (1-10080, opzionale). Utile quando l'utente
+      specifica "un'ora di sport", "2 ore di studio", ecc.
     - description: Descrizione con TUTTI I DETTAGLI (contesto, note, informazioni aggiuntive)
     - priority: "Alta", "Media", o "Bassa" (dedurre dal contesto)
 
@@ -411,13 +415,12 @@ async def add_task(
               title="Dentista" description="Controllo semestrale, portare tessera sanitaria"
               title="Studiare matematica" description="Capitoli 5-7, esercizi da pag 120 a 135"
 
-    - End_time: SEMPRE includere l'ora appropriata al contesto (pranzo=12:00, cena=19:00, etc)
     - Se categoria non esiste, ritorna errore con suggerimenti
 
     Esempi di uso CORRETTI:
-    - add_task(title="Riunione team", description="Meeting settimanale con il team di sviluppo", end_time="2025-12-15 10:00")
-    - add_task(title="Pranzo Marco", description="Pranzo con Marco al ristorante Da Luigi", category_name="Personale", end_time="2025-12-16 12:30")
-    - add_task(title="Studiare matematica", description="Studiare 2 ore - Capitoli 5-7", end_time="2025-12-15 16:00")
+    - add_task(title="Riunione team", description="Meeting settimanale", end_time="2025-12-15 10:00")
+    - add_task(title="Palestra", category_name="Sport", end_time="2025-12-16 18:00", duration_minutes=60)
+    - add_task(title="Studiare matematica", description="Capitoli 5-7", end_time="2025-12-15 16:00", duration_minutes=120)
     """
     user_id = authenticate_from_context(ctx)
 
@@ -460,7 +463,7 @@ async def add_task(
             title=title,
             category_id=category_id,
             end_time=end_time,
-            start_time=start_time,
+            duration_minutes=duration_minutes,
             description=description,
             priority=priority or "Bassa"
         )
