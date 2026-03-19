@@ -8,43 +8,21 @@ from src.formatters import format_categories_for_ui
 
 
 async def get_my_categories(ctx: Context) -> Dict[str, Any]:
-    """
-    Ottieni TUTTE le categorie dell'utente per USO INTERNO (lookup, validazione).
+    """Recupera tutte le categorie dell'utente come JSON grezzo per uso interno (lookup, validazione).
 
-    Questo tool restituisce dati JSON semplici senza formattazione UI.
-    NON mostra nulla all'utente sullo schermo dell'app.
+    Non mostra nulla all'utente. Restituisce dati strutturati per elaborazione interna.
 
-    Authentication:
-        Automatic - JWT token extracted from SSE connection headers
+    Quando usare:
+    - Trovare category_id da nome categoria prima di creare un task
+    - Verificare se una categoria esiste o ottenerne il nome esatto
 
-    Returns:
-        {
-            "categories": [
-                {
-                    "category_id": 1,
-                    "name": "Lavoro",
-                    "description": "Task di lavoro",
-                    "user_id": 123
-                },
-                ...
-            ],
-            "total": 5
-        }
+    Quando NON usare:
+    - Se l'utente chiede "Mostrami le categorie" → usa show_categories_to_user()
 
-    QUANDO USARE QUESTO TOOL:
-    - ✅ Trovare category_id da nome categoria prima di creare un task
-    - ✅ Validare che una categoria esista
-    - ✅ Verificare il nome esatto di una categoria
-    - ❌ NON usare quando l'utente chiede "Mostrami le categorie" (usa show_categories_to_user)
-
-    Per MOSTRARE le categorie all'utente, usa show_categories_to_user() invece.
-
-    Example usage:
+    Example:
         User: "Crea task Riunione in categoria Lavoro"
-        Bot reasoning: "Devo trovare l'ID della categoria Lavoro"
-        Bot calls: get_my_categories()
-        Bot finds: category_id=5 per "Lavoro"
-        Bot calls: add_task(title="Riunione", category_id=5)
+        → get_my_categories() per trovare category_id=5 "Lavoro"
+        → add_task(title="Riunione", category_name="Lavoro")
     """
     user_id = authenticate_from_context(ctx)
     categories = await category_client.get_categories(user_id)
@@ -60,42 +38,13 @@ async def create_category(
     name: str,
     description: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Crea una NUOVA categoria per organizzare i task.
-
-    Authentication:
-        Automatic - JWT token extracted from SSE connection headers
+    """Crea una nuova categoria per organizzare i task. Restituisce errore se esiste già.
 
     Parameters:
     - name: Nome della categoria (obbligatorio, es: "Lavoro", "Progetti", "Casa")
     - description: Descrizione opzionale (es: "Task relativi al lavoro")
 
-    Errore se la categoria esiste già.
-
-    Returns:
-        {
-            "success": true,
-            "type": "category_created",
-            "message": "✅ Categoria 'Progetti' creata con successo",
-            "category": {
-                "category_id": 10,
-                "name": "Progetti",
-                "description": "Progetti personali",
-                "user_id": 123
-            }
-        }
-
-    L'app React Native mostrerà automaticamente un bottone "Modifica categoria"
-    quando riceve type: "category_created".
-
-    Utile per:
-    - Creare categorie per organizzare meglio i task
-    - Preparare una struttura prima di aggiungere task
-
-    Example usage:
-        User: "Crea una categoria Progetti"
-        Bot calls: create_category(name="Progetti", description="Progetti personali")
-        Bot response: "✅ Categoria 'Progetti' creata con successo"
+    Restituisce type="category_created" — l'app mostra automaticamente il pulsante "Modifica categoria".
     """
     user_id = authenticate_from_context(ctx)
     result = await category_client.create_category(user_id, name, description)
@@ -114,37 +63,19 @@ async def update_category(
     new_name: Optional[str] = None,
     new_description: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    Modifica il nome e/o descrizione di una categoria ESISTENTE tramite il suo ID.
+    """Modifica nome e/o descrizione di una categoria esistente tramite il suo ID.
 
-    Procedura:
-    1. Prima usa get_my_categories per ottenere l'elenco delle categorie e trovare l'ID corretto
-    2. Usa l'ID della categoria trovata in questa funzione per modificarla
-
-    Authentication:
-        Automatic - JWT token extracted from SSE connection headers
+    Chiama get_my_categories() prima per ottenere il category_id corretto. Specifica solo i campi da modificare.
 
     Parameters:
-    - category_id: ID della categoria da modificare (ottienilo con get_my_categories)
-    - new_name: Nuovo nome per la categoria (opzionale, mantiene quello attuale se non specificato)
-    - new_description: Nuova descrizione (opzionale, mantiene quella attuale se non specificato)
+    - category_id: ID della categoria da modificare — ottienilo con get_my_categories() (obbligatorio)
+    - new_name: Nuovo nome (opzionale, mantiene l'attuale se non specificato)
+    - new_description: Nuova descrizione (opzionale, mantiene l'attuale se non specificato)
 
-    Returns:
-        {
-            "message": "Category updated successfully to 'Nuovo Nome'"
-        }
-
-    Utile per:
-    - Rinominare categorie usando l'ID
-    - Aggiornare solo la descrizione di una categoria tramite il suo ID
-    - Modificare sia nome che descrizione contemporaneamente
-
-    Example usage:
-        User: "Rinomina la categoria Lavoro in Ufficio"
-        Bot calls:
-            1. get_my_categories() → trova category_id=5 per "Lavoro"
-            2. update_category(category_id=5, new_name="Ufficio")
-        Bot response: "✅ Categoria rinominata da 'Lavoro' a 'Ufficio'"
+    Example:
+        User: "Rinomina Lavoro in Ufficio"
+        → get_my_categories() → trova category_id=5
+        → update_category(category_id=5, new_name="Ufficio")
     """
     user_id = authenticate_from_context(ctx)
     result = await category_client.update_category(
@@ -166,38 +97,17 @@ async def search_categories(
     search_term: str,
     max_suggestions: int = 5
 ) -> Dict[str, Any]:
-    """
-    CERCA una categoria per nome, con suggerimenti di categorie simili.
+    """Cerca una categoria per nome con corrispondenza fuzzy. Utile quando non si ricorda il nome esatto.
 
-    Perfetto quando non ricordi il nome esatto di una categoria.
-    Mostra corrispondenze esatte e suggerimenti di categorie simili.
-
-    Authentication:
-        Automatic - JWT token extracted from SSE connection headers
+    Restituisce corrispondenza esatta (se trovata) e categorie simili ordinate per similarità.
 
     Parameters:
-    - search_term: Parte del nome della categoria da cercare
+    - search_term: Parte del nome della categoria da cercare (es: "lav" trova "Lavoro")
     - max_suggestions: Numero massimo di suggerimenti (default: 5)
 
-    Returns:
-        {
-            "success": true,
-            "search_term": "lavoro",
-            "exact_match": {...},  # Se trovata corrispondenza esatta
-            "similar_categories": [...],  # Categorie simili
-            "similarity_scores": [0.8, 0.6, ...],
-            "total_categories": 10,
-            "message": "Found 3 similar categories for 'lavoro'"
-        }
-
-    Esempi:
-    - search_categories(search_term="lavoro") -> mostra categorie simili
-    - search_categories(search_term="proj") -> suggerisce categorie tipo "Progetto"
-
-    Example usage:
-        User: "Cerca categorie tipo progetto"
-        Bot calls: search_categories(search_term="proj")
-        Bot response: "Ho trovato 2 categorie simili: 'Progetti', 'Progetto Casa'"
+    Examples:
+    - search_categories(search_term="lavoro") → trova "Lavoro" come esatta + simili
+    - search_categories(search_term="proj") → suggerisce "Progetti", "Progetto Casa"
     """
     user_id = authenticate_from_context(ctx)
 
@@ -245,60 +155,20 @@ async def show_category_details(
     category_name: Optional[str] = None,
     category_id: Optional[int] = None
 ) -> Dict[str, Any]:
-    """
-    MOSTRA i dettagli di UNA SINGOLA categoria all'utente con formattazione UI completa.
+    """Mostra i dettagli di una singola categoria nell'app mobile con statistiche dei task.
 
-    Questo tool è specificamente per VISUALIZZARE una categoria specifica sullo schermo dell'app mobile.
-    Include tutti i dettagli della categoria, conteggio task, e statistiche.
-
-    Authentication:
-        Automatic - JWT token extracted from SSE connection headers
+    Restituisce type="category_details" con conteggio task, breakdown per stato e priorità.
+    Specifica category_name OPPURE category_id, non entrambi.
 
     Parameters:
-    - category_name: Nome della categoria da visualizzare (es: "Lavoro") (opzionale)
-    - category_id: ID della categoria da visualizzare (opzionale, alternativo a category_name)
+    - category_name: Nome della categoria (es: "Lavoro") — alternativo a category_id
+    - category_id: ID della categoria — alternativo a category_name
 
-    Nota: Specifica category_name OPPURE category_id, non entrambi.
+    Quando usare:
+    - "Mostrami la categoria Lavoro", "Dettagli di Personale", "Quanti task ho in Lavoro?"
 
-    Returns:
-        {
-            "type": "category_details",
-            "version": "1.0",
-            "category": {
-                "id": 1,
-                "name": "Lavoro",
-                "description": "Task di lavoro",
-                "taskCount": 12,
-                "userId": 123
-            },
-            "task_breakdown": {
-                "pending": 8,
-                "completed": 3,
-                "cancelled": 1,
-                "high_priority": 4,
-                "medium_priority": 5,
-                "low_priority": 3
-            },
-            "voice_summary": "Categoria Lavoro con 12 task, di cui 8 in sospeso e 4 ad alta priorità.",
-            "ui_hints": {
-                "enable_edit": true,
-                "enable_view_tasks": true
-            }
-        }
-
-    QUANDO USARE QUESTO TOOL:
-    - ✅ Utente chiede: "Mostrami la categoria Lavoro"
-    - ✅ Utente chiede: "Dettagli della categoria Personale"
-    - ✅ Utente chiede: "Fammi vedere i dettagli di Lavoro"
-    - ❌ NON usare per vedere tutte le categorie (usa show_categories_to_user)
-
-    L'app React Native renderizza automaticamente una vista dettagliata
-    quando riceve type: "category_details".
-
-    Example usage:
-        User: "Mostrami i dettagli della categoria Lavoro"
-        Bot calls: show_category_details(category_name="Lavoro")
-        Bot response: "Ecco i dettagli della categoria Lavoro" (l'app mostra la vista dettagliata)
+    Quando NON usare:
+    - Per vedere tutte le categorie → usa show_categories_to_user()
     """
     user_id = authenticate_from_context(ctx)
 
@@ -372,54 +242,15 @@ async def show_category_details(
 
 
 async def show_categories_to_user(ctx: Context) -> Dict[str, Any]:
-    """
-    MOSTRA le categorie all'utente con formattazione UI completa.
+    """Mostra tutte le categorie all'utente nell'app mobile con conteggio task e formattazione UI.
 
-    Questo tool è specificamente per VISUALIZZARE le categorie sullo schermo dell'app mobile.
-    Include formattazione ricca con colori, icone, conteggi task, e configurazione UI.
+    Restituisce type="category_list" — l'app React Native renderizza automaticamente la griglia.
 
-    Authentication:
-        Automatic - JWT token extracted from SSE connection headers
+    Quando usare:
+    - "Mostrami le categorie", "Quali categorie ho?", "Fammi vedere le categorie"
 
-    Returns:
-        {
-            "type": "category_list",
-            "version": "1.0",
-            "categories": [
-                {
-                    "id": 1,
-                    "name": "Lavoro",
-                    "description": "Task di lavoro",
-                    "taskCount": 12
-                },
-                ...
-            ],
-            "summary": {
-                "total": 5,
-                "categories_with_tasks": 3,
-                "total_tasks": 25
-            },
-            "voice_summary": "Hai 5 categorie, di cui 3 con task attivi. Totale 25 task.",
-            "ui_hints": {
-                "display_mode": "grid",
-                "enable_swipe_actions": true,
-                "enable_search": true
-            }
-        }
-
-    QUANDO USARE QUESTO TOOL:
-    - ✅ Utente chiede: "Mostrami le categorie"
-    - ✅ Utente chiede: "Quali categorie ho?"
-    - ✅ Utente chiede: "Fammi vedere le categorie"
-    - ❌ NON usare per lookup interni (usa get_my_categories invece)
-
-    L'app React Native renderizza automaticamente una lista/griglia formattata
-    quando riceve type: "category_list".
-
-    Example usage:
-        User: "Mostrami le mie categorie"
-        Bot calls: show_categories_to_user()
-        Bot response: "Ecco le tue 5 categorie" (l'app mostra la lista formattata)
+    Quando NON usare:
+    - Per lookup interni o trovare un category_id → usa get_my_categories()
     """
     user_id = authenticate_from_context(ctx)
 

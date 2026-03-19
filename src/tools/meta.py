@@ -13,46 +13,20 @@ async def get_or_create_category(
     description: Optional[str] = None,
     similarity_threshold: float = 0.8
 ) -> Dict[str, Any]:
-    """
-    OTTIENE o CREA una categoria con ricerca intelligente.
+    """Trova una categoria per nome (esatto o fuzzy) oppure la crea se non esiste.
 
-    Se la categoria esiste (esatta o simile), la ritorna.
-    Se non esiste, la crea.
-
-    Perfetto per evitare duplicati e creare categorie intelligentemente.
-
-    Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+    Garantisce sempre una categoria valida senza duplicati. Usa prima la ricerca fuzzy, poi crea se necessario.
 
     Parameters:
-    - category_name: Nome della categoria
-    - description: Descrizione (usata se deve creare una nuova categoria)
-    - similarity_threshold: Sensibilità del match (0-1, default: 0.8)
+    - category_name: Nome della categoria da trovare o creare (obbligatorio)
+    - description: Descrizione da usare se la categoria viene creata (opzionale)
+    - similarity_threshold: Soglia minima di similarità per match fuzzy, range 0-1 (default: 0.8)
 
-    Returns:
-        {
-            "success": true,
-            "category": {
-                "category_id": 5,
-                "name": "Lavoro",
-                "description": "Task di lavoro",
-                "user_id": 123
-            },
-            "action": "found_exact" | "found_similar" | "created",
-            "message": "Found exact category: 'Lavoro'" | "Created new category: 'Progetti'"
-        }
+    Restituisce sempre la categoria con campo action: "found_exact" | "found_similar" | "created".
 
-    Restituisce sempre la categoria, creandola automaticamente se necessario.
-
-    Example usage:
-        User: "Aggiungi task nella categoria Progetti"
-        Bot calls: get_or_create_category(
-            authorization="Bearer eyJ...",
-            category_name="Progetti",
-            description="Progetti personali"
-        )
-        # Se "Progetti" non esiste, viene creata automaticamente
-        Bot response: "✅ Categoria 'Progetti' creata. Ora puoi aggiungerci task."
+    Quando usare:
+    - Vuoi assicurarti che una categoria esista prima di creare task, senza rischiare duplicati
+    - Quando l'utente menziona una categoria che potrebbe non esistere ancora
     """
     user_id = authenticate_from_context(ctx)
 
@@ -112,56 +86,19 @@ async def move_all_tasks_between_categories(
     target_category: str,
     auto_create_target: bool = True
 ) -> Dict[str, Any]:
-    """
-    SPOSTA TUTTI i task da una categoria a un'altra.
-
-    Perfetto per:
-    - Riorganizzare task tra categorie
-    - Unire categorie
-    - Cambiare strategia di organizzazione
-
-    Crea automaticamente la categoria destinazione se non esiste.
-
-    Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+    """Sposta tutti i task da una categoria all'altra. Crea automaticamente la categoria destinazione se non esiste.
 
     Parameters:
-    - source_category: Nome categoria di origine (deve esistere)
-    - target_category: Nome categoria destinazione
-    - auto_create_target: Se True, crea categoria destinazione se non esiste (default: True)
+    - source_category: Nome categoria di origine — deve esistere (obbligatorio)
+    - target_category: Nome categoria destinazione (obbligatorio)
+    - auto_create_target: Se True, crea la destinazione automaticamente se mancante (default: True)
 
-    Returns:
-        {
-            "success": true,
-            "tasks_moved": 10,
-            "tasks_failed": 0,
-            "moved_tasks": [{"task_id": 1, "title": "...", ...}, ...],
-            "failed_moves": [],
-            "source_category": "Vecchia",
-            "target_category": "Nuova",
-            "source_category_action": "found_exact",
-            "target_category_action": "created",
-            "message": "Moved 10 tasks from 'Vecchia' to 'Nuova'"
-        }
+    Restituisce quanti task spostati, quanti falliti e la lista dettagliata.
 
-    Restituisce:
-    - Numero di task spostati
-    - Lista dei task spostati
-    - Errori (se ci sono)
-
-    Esempio:
-    - Sposta tutti i task da "Vecchio" a "Nuovo"
-    - Unifica "Progetti A" e "Progetti B" in una sola categoria
-
-    Example usage:
-        User: "Sposta tutti i task da Lavoro a Ufficio"
-        Bot calls: move_all_tasks_between_categories(
-            authorization="Bearer eyJ...",
-            source_category="Lavoro",
-            target_category="Ufficio",
-            auto_create_target=True
-        )
-        Bot response: "✅ Spostati 10 task da 'Lavoro' a 'Ufficio'"
+    Quando usare:
+    - "Sposta tutti i task da Lavoro a Ufficio"
+    - "Unisci le categorie Progetti A e Progetti B"
+    - Riorganizzare la struttura delle categorie
     """
     user_id = authenticate_from_context(ctx)
 
@@ -285,65 +222,22 @@ async def add_multiple_tasks(
     tasks: List[Dict[str, Any]],
     auto_create_categories: bool = False
 ) -> Dict[str, Any]:
-    """
-    CREA MULTIPLI task in UNA SOLA CHIAMATA.
-
-    Perfetto per aggiungere molti task da liste, prompt vocali, o bulk import.
-    Può creare automaticamente le categorie mancanti se richiesto.
-
-    Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+    """Crea più task in una sola chiamata. Più efficiente di chiamare add_task() ripetutamente.
 
     Parameters:
-    - tasks: Lista di task (ognuno deve avere almeno 'title')
-    - auto_create_categories: Se True, crea categorie automaticamente (default: False)
+    - tasks: Lista di task da creare. Ogni task è un oggetto con:
+      - title: Titolo (obbligatorio)
+      - category_name: Nome categoria (opzionale, default: "Generale")
+      - end_time: Scadenza formato "YYYY-MM-DD HH:MM:SS" (opzionale)
+      - description: Dettagli aggiuntivi (opzionale)
+      - priority: "Alta", "Media" o "Bassa" (opzionale, default: "Bassa")
+    - auto_create_categories: Se True, crea le categorie mancanti automaticamente (default: False)
 
-    Ogni task nella lista deve essere un dict con:
-    {
-        "title": "Titolo del task",
-        "category_name": "Categoria (opzionale)",
-        "end_time": "Data (opzionale)",
-        "description": "Descrizione (opzionale)",
-        "priority": "Alta/Media/Bassa (opzionale)"
-    }
+    Restituisce summary con conteggio creati/falliti e lista dettagliata degli errori.
 
-    Returns:
-        {
-            "success": true,
-            "created_tasks": [{...}, {...}, ...],
-            "failed_tasks": [{"index": 2, "error": "...", "task_info": {...}}, ...],
-            "categories_created": ["Nuova1", "Nuova2"],
-            "categories_used": ["Lavoro", "Personale", "Nuova1"],
-            "summary": {
-                "total_tasks_requested": 10,
-                "tasks_created": 8,
-                "tasks_failed": 2,
-                "categories_created": 2,
-                "categories_used": 3
-            },
-            "message": "Created 8/10 tasks successfully"
-        }
-
-    Restituisce statistiche dettagliate: quanti creati, quanti falliti, ecc.
-
-    Esempio:
-    add_multiple_tasks(tasks=[
-        {"title": "Task 1", "priority": "Alta"},
-        {"title": "Task 2", "category_name": "Lavoro"},
-        {"title": "Task 3", "end_time": "2025-12-31"}
-    ])
-
-    Example usage:
-        User: "Aggiungi questi task: Spesa domani, Dentista giovedì, Palestra venerdì"
-        Bot calls: add_multiple_tasks(
-            authorization="Bearer eyJ...",
-            tasks=[
-                {"title": "Spesa", "end_time": "2025-12-16 10:00"},
-                {"title": "Dentista", "end_time": "2025-12-19 15:00"},
-                {"title": "Palestra", "end_time": "2025-12-20 18:00"}
-            ]
-        )
-        Bot response: "✅ Creati 3 task: Spesa, Dentista, Palestra"
+    Quando usare:
+    - L'utente elenca più task contemporaneamente: "Aggiungi: Spesa, Dentista, Palestra"
+    - Bulk import da liste o note
     """
     user_id = authenticate_from_context(ctx)
 
