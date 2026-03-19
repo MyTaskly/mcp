@@ -15,42 +15,28 @@ async def get_tasks(
     status: Optional[str] = None,
     task_id: Optional[int] = None
 ) -> Dict[str, Any]:
-    """Recupera i task dell'utente per USO INTERNO (lookup, validazione, filtri).
+    """Recupera i task dell'utente come JSON grezzo per uso interno (lookup, validazione, filtri).
 
-    Questo tool restituisce dati JSON semplici senza formattazione UI.
-    NON mostra nulla all'utente sullo schermo dell'app.
+    Non mostra nulla all'utente. Restituisce dati strutturati per elaborazione interna.
 
-    Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+    Parameters:
+    - task_id: ID specifico del task (per cercare un singolo task)
+    - category_id: Filtra per ID categoria — se l'utente specifica il NOME, chiama prima get_my_categories() per ottenere l'ID
+    - priority: Filtra per priorità — valori esatti: "Alta", "Media", "Bassa"
+    - status: Filtra per stato — valori esatti: "In sospeso", "Completato", "Annullato"
 
-    QUANDO USARE QUESTO TOOL:
-    - ✅ Trovare task_id prima di modificare/completare un task
-    - ✅ Filtrare task per categoria/priorità/stato per logica interna
-    - ✅ Verificare se un task esiste
-    - ❌ NON usare quando l'utente chiede "Mostrami i task" (usa show_tasks_to_user)
+    Quando usare:
+    - Trovare task_id prima di modificare/completare/eliminare un task
+    - Verificare se un task esiste
+    - Filtrare task per elaborazione interna
 
-    Usa questo tool per:
-    - Ottenere TUTTI i task: non specificare filtri
-    - Cercare un task SPECIFICO: usa task_id
-    - Filtrare per CATEGORIA: usa category_id (IMPORTANTE: se l'utente specifica il NOME della categoria,
-      devi PRIMA chiamare get_my_categories() per trovare l'ID corrispondente, POI chiamare get_tasks con category_id)
-    - Filtrare per PRIORITÀ: usa priority ("Alta", "Media", "Bassa")
-    - Filtrare per STATO: usa status ("In sospeso", "Completato", "Annullato")
-    - Combinare più filtri: usa multiple opzioni insieme
+    Quando NON usare:
+    - Se l'utente chiede "Mostrami i task" → usa show_tasks_to_user()
 
-    PROCEDURA per filtrare per categoria quando l'utente specifica il NOME:
-    1. Chiama get_my_categories() per ottenere tutte le categorie con i loro ID
-    2. Trova la categoria con il nome corrispondente
-    3. Usa il category_id trovato per chiamare get_tasks(category_id=X)
-
-    Per MOSTRARE i task all'utente, usa show_tasks_to_user() invece.
-
-    Example usage:
+    Example:
         User: "Completa il task Riunione"
-        Bot reasoning: "Devo trovare l'ID del task Riunione"
-        Bot calls: get_tasks()
-        Bot finds: task_id=12 per "Riunione"
-        Bot calls: complete_task(task_id=12)
+        → get_tasks() per trovare task_id=12
+        → complete_task(task_id=12)
     """
     user_id = authenticate_from_context(ctx)
 
@@ -73,37 +59,24 @@ async def update_task(
     priority: Optional[str] = None,
     status: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Modifica un task esistente tramite il suo ID.
+    """Modifica un task esistente tramite il suo ID. Specifica solo i campi da aggiornare.
 
-    ⚠️ IMPORTANTE - PROCEDURA OBBLIGATORIA:
-    1. PRIMA chiama get_tasks() per ottenere la lista completa dei task con i loro ID
-    2. Identifica il task_id corretto dalla lista (cerca per titolo, categoria, ecc.)
-    3. POI chiama update_task() con il task_id trovato
-
-    ❌ NON cercare di indovinare il task_id!
-    ❌ NON usare task_id di task precedentemente modificati senza verificare!
-    ✅ Chiama SEMPRE get_tasks() prima per ottenere l'ID aggiornato!
-
-    Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+    Procedura obbligatoria: chiama sempre get_tasks() prima per ottenere il task_id corretto.
+    Non indovinare l'ID.
 
     Parameters:
-    - task_id: ID del task da modificare (OBBLIGATORIO - ottienilo con get_tasks!)
-    - title: Nuovo titolo del task (opzionale)
-    - description: Nuova descrizione (opzionale)
-    - end_time: Data/ora scadenza - formato "YYYY-MM-DD HH:MM:SS" nella timezone locale
-      dell'utente (già nota dal system prompt). Il server converte automaticamente in UTC.
-    - duration_minutes: Durata in minuti (1-10080, opzionale)
-    - priority: Nuova priorità - USA ESATTAMENTE uno di: "Alta", "Media", "Bassa" (opzionale)
-    - status: Nuovo stato - USA ESATTAMENTE uno di: "In sospeso", "Completato", "Annullato" (opzionale)
-      ❌ NON usare valori inglesi come "completed", "pending", "cancelled"
-      ✅ SEMPRE usare i valori italiani esatti: "Completato", "In sospeso", "Annullato"
+    - task_id: ID del task da modificare — ottienilo sempre con get_tasks() (obbligatorio)
+    - title: Nuovo titolo (max 100 caratteri, opzionale)
+    - description: Nuova descrizione con dettagli aggiuntivi (opzionale)
+    - end_time: Scadenza in timezone locale dell'utente — formato "YYYY-MM-DD HH:MM:SS" (opzionale)
+    - duration_minutes: Durata in minuti, range 1-10080 (opzionale)
+    - priority: "Alta", "Media" o "Bassa" — solo valori italiani esatti (opzionale)
+    - status: "In sospeso", "Completato" o "Annullato" — solo valori italiani esatti (opzionale)
 
-    Nota: Specifica solo i campi che vuoi modificare. I campi non specificati mantengono il valore attuale.
-
-    Esempio corretto:
-    1. Chiama get_tasks() → ottieni lista con task_id=42 per "Meeting"
-    2. Chiama update_task(task_id=42, title="Riunione importante")
+    Example:
+        User: "Sposta la riunione a domani"
+        → get_tasks() → trova task_id=42 "Riunione team"
+        → update_task(task_id=42, end_time="2026-03-20 10:00:00")
     """
     user_id = authenticate_from_context(ctx)
 
@@ -125,20 +98,16 @@ async def update_task(
 
 
 async def complete_task(ctx: Context, task_id: int) -> Dict[str, Any]:
-    """Segna un task come COMPLETATO.
-
-    Questo è uno shortcut veloce per marcare un task come completato.
-    Se hai bisogno di cambiare lo stato a qualcos'altro, usa update_task.
-
-    Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+    """Segna un task come completato. Shortcut rapido per update_task(status="Completato").
 
     Parameters:
-    - task_id: ID del task da completare
+    - task_id: ID del task da completare — ottienilo con get_tasks() se non lo conosci
 
-    Esempi:
-    - Voce: "Segna il task 5 come completato" -> complete_task(task_id=5)
-    - API: complete_task(task_id=5)
+    Quando usare:
+    - L'utente dice "fatto", "completato", "ho finito [task]"
+
+    Quando NON usare:
+    - Per cambiare stato a "Annullato" → usa update_task(status="Annullato")
     """
     user_id = authenticate_from_context(ctx)
 
@@ -156,21 +125,11 @@ async def complete_task(ctx: Context, task_id: int) -> Dict[str, Any]:
 
 
 async def get_task_stats(ctx: Context) -> Dict[str, Any]:
-    """Ottieni statistiche complete sui task dell'utente.
+    """Restituisce statistiche aggregate sui task dell'utente: conteggi per stato, priorità e categoria.
 
-    Restituisce metriche utili per:
-    - Monitorare la produttività
-    - Vedere quanti task sono completati vs in sospeso
-    - Analizzare la distribuzione per priorità e stato
-    - Ottenere informazioni sui prossimi impegni
-
-    Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
-
-    Utile per domande come:
-    - "Quanti task ho completato?"
-    - "Quanti task ad alta priorità ho?"
-    - "Qual è la mia categoria più carica?"
+    Quando usare:
+    - "Quanti task ho completato?", "Quanti task ad alta priorità ho?"
+    - "Qual è la mia categoria più carica?", "Come sto con la produttività?"
     """
     user_id = authenticate_from_context(ctx)
 
@@ -184,22 +143,15 @@ async def get_next_due_task(
     ctx: Context,
     limit: int = 1
 ) -> Dict[str, Any]:
-    """Ottieni i PROSSIMI task in scadenza (i task con le date di fine più vicine nel futuro).
-
-    Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+    """Restituisce i task con le scadenze più vicine nel futuro, ordinati per data crescente.
 
     Parameters:
-    - limit: Numero di task da restituire (default: 1, massimo: 20)
+    - limit: Quanti task restituire (default: 1, max: 20)
 
-    Perfetto per domande come:
-    - "Qual è il prossimo task in scadenza?" (limit=1)
-    - "Dammi i prossimi 3 task in scadenza" (limit=3)
-    - "Quando scade il prossimo impegno?"
-    - "Quali sono le prossime 5 scadenze?" (limit=5)
-
-    Restituisce i task con le date di scadenza più vicine, indipendentemente da quando siano
-    (domani, tra una settimana, o tra un anno).
+    Quando usare:
+    - "Qual è il prossimo task in scadenza?" → limit=1
+    - "Dammi le prossime 5 scadenze" → limit=5
+    - "Quando scade il mio prossimo impegno?"
     """
     user_id = authenticate_from_context(ctx)
 
@@ -266,17 +218,10 @@ async def get_next_due_task(
 
 
 async def get_overdue_tasks(ctx: Context) -> List[Dict[str, Any]]:
-    """Ottieni tutti i task SCADUTI (la data di fine è passata).
+    """Restituisce tutti i task non completati con scadenza già passata, ordinati dal più vecchio.
 
-    Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
-
-    Perfetto per domande come:
-    - "Quali task ho scaduto?"
-    - "Quali impegni ho mancato?"
-    - "Mostra i task in ritardo"
-
-    I task ritornati sono ordinati per data di scadenza (più vecchi prima).
+    Quando usare:
+    - "Quali task ho scaduto?", "Mostra i task in ritardo", "Quali impegni ho mancato?"
     """
     user_id = authenticate_from_context(ctx)
 
@@ -320,20 +265,15 @@ async def get_upcoming_tasks(
     ctx: Context,
     days: int = 7
 ) -> List[Dict[str, Any]]:
-    """Ottieni i task in scadenza nei prossimi N giorni.
-
-    Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+    """Restituisce i task non completati con scadenza nei prossimi N giorni, ordinati per data.
 
     Parameters:
-    - days: Numero di giorni da controllare (default: 7)
+    - days: Finestra temporale in giorni (default: 7)
 
-    Perfetto per:
-    - "Cosa ho da fare domani?" (days=1)
-    - "Quali task scadono questa settimana?" (days=7)
-    - "Mostra i prossimi impegni" (days=7)
-
-    I task sono ordinati per data di scadenza (più vicini prima).
+    Quando usare:
+    - "Cosa ho domani?" → days=1
+    - "Cosa scade questa settimana?" → days=7
+    - "Mostra i prossimi impegni dei prossimi 30 giorni" → days=30
     """
     user_id = authenticate_from_context(ctx)
 
@@ -386,41 +326,23 @@ async def add_task(
     description: Optional[str] = None,
     priority: str = "Bassa"
 ) -> Dict[str, Any]:
-    """Crea un NUOVO task con gestione intelligente delle categorie.
-
-    Questo è il tool principale per aggiungere task!
-
-    Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+    """Crea un nuovo task. La categoria deve esistere — restituisce errore con suggerimenti se non trovata.
 
     Parameters:
-    - title: Titolo del task (OBBLIGATORIO, MAX 100 caratteri, BREVE E CONCISO)
-    - category_name: Categoria (default: "Generale"). DEVE ESISTERE - non crea categorie automaticamente
-    - end_time: Scadenza con ORA - formato "YYYY-MM-DD HH:MM:SS" nella timezone locale dell'utente
-      (già nota dal system prompt come {user_timezone}). Il server converte automaticamente in UTC.
-      SEMPRE includere l'ora appropriata al contesto (riunione mattina=10:00, pranzo=12:00, cena=19:00, etc.)
-    - duration_minutes: Durata prevista in minuti (1-10080, opzionale). Utile quando l'utente
-      specifica "un'ora di sport", "2 ore di studio", ecc.
-    - description: Descrizione con TUTTI I DETTAGLI (contesto, note, informazioni aggiuntive)
-    - priority: "Alta", "Media", o "Bassa" (dedurre dal contesto)
+    - title: Titolo breve e identificativo (obbligatorio, max 100 caratteri)
+      Buono: "Riunione Vicenza" | Cattivo: "Riunione di lavoro importante a Vicenza il pomeriggio"
+    - category_name: Nome categoria esistente (default: "Generale") — non crea categorie automaticamente
+    - end_time: Scadenza in timezone locale — formato "YYYY-MM-DD HH:MM:SS", includi ora appropriata al contesto
+    - duration_minutes: Durata prevista in minuti, range 1-10080 (opzionale)
+    - description: Tutti i dettagli, contesto e note aggiuntive (opzionale)
+    - priority: "Alta", "Media" o "Bassa" — deduci dal contesto (default: "Bassa")
 
-    IMPORTANTE - DIVISIONE TITOLO/DESCRIZIONE:
-    - Titolo: MAX 100 caratteri, SOLO per identificare rapidamente il task
-      Esempi: "Riunione Vicenza" (NON "Riunione di lavoro importante a Vicenza")
-              "Spesa supermercato" (NON "Andare a fare la spesa al supermercato")
-              "Chiamare Mario" (NON "Ricordarsi di chiamare Mario per il progetto")
+    Regola titolo/descrizione: il titolo identifica, la descrizione spiega.
+    Metti SEMPRE i dettagli nella descrizione, non nel titolo.
 
-    - Descrizione: USA SEMPRE per dettagli, contesto, note aggiuntive
-      Esempi: title="Riunione Vicenza" description="Riunione di lavoro importante alle 16:00"
-              title="Dentista" description="Controllo semestrale, portare tessera sanitaria"
-              title="Studiare matematica" description="Capitoli 5-7, esercizi da pag 120 a 135"
-
-    - Se categoria non esiste, ritorna errore con suggerimenti
-
-    Esempi di uso CORRETTI:
-    - add_task(title="Riunione team", description="Meeting settimanale", end_time="2025-12-15 10:00")
-    - add_task(title="Palestra", category_name="Sport", end_time="2025-12-16 18:00", duration_minutes=60)
-    - add_task(title="Studiare matematica", description="Capitoli 5-7", end_time="2025-12-15 16:00", duration_minutes=120)
+    Examples:
+    - add_task(title="Riunione team", end_time="2026-03-20 10:00:00", description="Meeting settimanale")
+    - add_task(title="Palestra", category_name="Sport", end_time="2026-03-20 18:00:00", duration_minutes=60)
     """
     user_id = authenticate_from_context(ctx)
 
@@ -493,83 +415,31 @@ async def show_tasks_to_user(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None
 ) -> Dict[str, Any]:
-    """
-    MOSTRA i task all'utente con formattazione UI completa e filtri avanzati.
+    """Mostra i task all'utente nell'app mobile con formattazione UI completa e filtri.
 
-    Questo tool è specificamente per VISUALIZZARE i task sullo schermo dell'app mobile.
-    Include formattazione ricca con date formattate, pulsanti azioni, e configurazione UI.
-
-    Authentication:
-        Requires valid JWT token in Authorization header: "Bearer <token>"
+    Restituisce type="task_list" — l'app React Native renderizza automaticamente la lista formattata.
 
     Parameters:
     - category_id: Filtra per ID categoria (opzionale)
-    - priority: Filtra per priorità ("Alta", "Media", "Bassa") (opzionale)
-    - status: Filtra per stato ("In sospeso", "Completato", "Annullato") (opzionale)
-    - due_date: Filtra per data di scadenza specifica (formato: "YYYY-MM-DD") (opzionale)
-    - start_date: Filtra task con scadenza >= start_date (formato: "YYYY-MM-DD") (opzionale)
-    - end_date: Filtra task con scadenza <= end_date (formato: "YYYY-MM-DD") (opzionale)
+    - priority: "Alta", "Media" o "Bassa" (opzionale)
+    - status: "In sospeso", "Completato" o "Annullato" (opzionale)
+    - due_date: Data specifica formato "YYYY-MM-DD" (opzionale, alternativo a start/end_date)
+    - start_date: Inizio range date formato "YYYY-MM-DD" (opzionale)
+    - end_date: Fine range date formato "YYYY-MM-DD" (opzionale)
 
-    Note sui filtri:
-    - Usa due_date per una data specifica, OPPURE start_date/end_date per un range
-    - I filtri possono essere combinati (es: categoria + priorità + range date)
+    I filtri sono combinabili. Usa due_date per un giorno preciso, start_date/end_date per un intervallo.
 
-    Returns:
-        {
-            "type": "task_list",
-            "version": "1.0",
-            "tasks": [
-                {
-                    "id": 1,
-                    "title": "Riunione team",
-                    "description": "Meeting settimanale",
-                    "endTime": "2025-12-15T10:00:00",
-                    "endTimeFormatted": "Lunedì 15 dicembre, 10:00",
-                    "category": "Lavoro",
-                    "priority": "Alta",
-                    "status": "In sospeso"
-                },
-                ...
-            ],
-            "filters_applied": {
-                "category_id": 1,
-                "priority": "Alta",
-                "date_range": "2025-12-01 to 2025-12-31"
-            },
-            "summary": {
-                "total": 10,
-                "pending": 6,
-                "completed": 4,
-                "high_priority": 2
-            },
-            "voice_summary": "Hai 10 task, di cui 2 ad alta priorità. 6 sono in sospeso e 4 completati.",
-            "ui_hints": {
-                "display_mode": "list",
-                "enable_swipe_actions": true,
-                "group_by": "category"
-            }
-        }
+    Quando usare:
+    - "Mostrami i task", "Quali task ho?", "Fammi vedere i miei impegni"
+    - "Mostra i task ad alta priorità di questa settimana"
+    - "Task che scadono il 15 marzo"
 
-    QUANDO USARE QUESTO TOOL:
-    - ✅ Utente chiede: "Mostrami i task"
-    - ✅ Utente chiede: "Quali task ho?"
-    - ✅ Utente chiede: "Fammi vedere i miei impegni"
-    - ✅ Utente chiede: "Mostra i task di categoria Lavoro"
-    - ✅ Utente chiede: "Mostra i task ad alta priorità di questa settimana"
-    - ✅ Utente chiede: "Fammi vedere i task che scadono il 15 dicembre"
-    - ❌ NON usare per lookup interni (usa get_tasks invece)
+    Quando NON usare:
+    - Per lookup interni o trovare un task_id → usa get_tasks()
 
-    L'app React Native renderizza automaticamente una lista formattata
-    quando riceve type: "task_list".
-
-    Example usage:
-        User: "Mostrami i task ad alta priorità"
-        Bot calls: show_tasks_to_user(priority="Alta")
-        Bot response: "Ecco i tuoi task ad alta priorità" (l'app mostra la lista filtrata)
-
-        User: "Mostra i task che scadono questa settimana"
-        Bot calls: show_tasks_to_user(start_date="2025-12-13", end_date="2025-12-19")
-        Bot response: "Ecco i task che scadono questa settimana" (l'app mostra la lista filtrata)
+    Example:
+        User: "Mostra i task ad alta priorità"
+        → show_tasks_to_user(priority="Alta")
     """
     user_id = authenticate_from_context(ctx)
 
