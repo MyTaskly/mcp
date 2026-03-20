@@ -133,10 +133,9 @@ async def get_task_stats(ctx: Context) -> Dict[str, Any]:
     """
     user_id = authenticate_from_context(ctx)
 
-    # Get statistics from FastAPI
     stats = await task_client.get_task_statistics(user_id)
 
-    return stats
+    return {"success": True, **stats}
 
 
 async def get_overdue_tasks(ctx: Context) -> Dict[str, Any]:
