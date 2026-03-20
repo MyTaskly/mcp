@@ -21,7 +21,10 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(python -m py_compile:*)",
-      "Bash(tee:*)"
+      "Bash(tee:*)",
+      "Bash(python3:*)",
+      "Bash(gh pr:*)",
+      "Bash(cat \"/home/gabry848/Documenti/Projects/system-prompts-and-models-of-ai-tools/Manus Agent Tools & Prompt/tools.json\")"
     ]
   }
 }
