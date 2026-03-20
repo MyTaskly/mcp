@@ -3,7 +3,7 @@
 from typing import Dict, Any, Optional
 from fastmcp import Context
 from src.auth import authenticate_from_context
-from src.client import category_client, task_client
+from src.client import category_client
 
 
 async def get_my_categories(ctx: Context) -> Dict[str, Any]:
