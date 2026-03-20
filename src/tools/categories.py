@@ -26,6 +26,9 @@ async def get_my_categories(ctx: Context) -> Dict[str, Any]:
     user_id = authenticate_from_context(ctx)
     categories = await category_client.get_categories(user_id)
 
+    for cat in categories:
+        cat.pop("user_id", None)
+
     return {
         "categories": categories,
         "total": len(categories)

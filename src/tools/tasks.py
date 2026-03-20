@@ -51,6 +51,9 @@ async def get_tasks(
         title_lower = title.lower()
         tasks = [t for t in tasks if title_lower in t.get("title", "").lower()]
 
+    for task in tasks:
+        task.pop("user", None)
+
     return {
         "tasks": tasks,
         "total": len(tasks)
@@ -168,6 +171,7 @@ async def get_overdue_tasks(ctx: Context) -> Dict[str, Any]:
     overdue.sort(key=lambda x: x["end_time_dt"])
     for task in overdue:
         del task["end_time_dt"]
+        task.pop("user", None)
 
     return {"tasks": overdue, "total": len(overdue)}
 
@@ -232,6 +236,7 @@ async def get_upcoming_tasks(
 
     for task in upcoming:
         del task["end_time_dt"]
+        task.pop("user", None)
 
     return {
         "success": True,
