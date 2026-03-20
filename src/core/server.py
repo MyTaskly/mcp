@@ -57,7 +57,6 @@ from src.tools.categories import (
     get_my_categories,
     create_category,
     update_category,
-    search_categories,
     show_categories_to_user
 )
 
@@ -66,7 +65,6 @@ from src.tools.tasks import (
     update_task,
     complete_task,
     get_task_stats,
-    get_next_due_task,
     get_overdue_tasks,
     get_upcoming_tasks,
     add_task,
@@ -81,11 +79,7 @@ from src.tools.notes import (
     show_notes_to_user
 )
 
-from src.tools.meta import (
-    get_or_create_category,
-    move_all_tasks_between_categories,
-    add_multiple_tasks
-)
+from src.tools.meta import add_multiple_tasks
 
 from src.tools.health import health_check
 
@@ -93,7 +87,6 @@ from src.tools.health import health_check
 mcp.tool()(log_tool(get_my_categories))
 mcp.tool()(log_tool(create_category))
 mcp.tool()(log_tool(update_category))
-mcp.tool()(log_tool(search_categories))
 mcp.tool()(log_tool(show_categories_to_user))
 
 # Register task tools
@@ -101,9 +94,8 @@ mcp.tool()(log_tool(get_tasks))
 mcp.tool()(log_tool(update_task))
 mcp.tool()(log_tool(complete_task))
 mcp.tool()(log_tool(get_task_stats))
-mcp.tool()(log_tool(get_next_due_task))
 mcp.tool()(log_tool(get_overdue_tasks))
-mcp.tool()(log_tool(get_upcoming_tasks)) # unire con get_next_due_task
+mcp.tool()(log_tool(get_upcoming_tasks))
 mcp.tool()(log_tool(add_task))
 mcp.tool()(log_tool(show_tasks_to_user))
 
@@ -115,8 +107,6 @@ mcp.tool()(log_tool(delete_note))
 mcp.tool()(log_tool(show_notes_to_user))
 
 # Register meta tools
-mcp.tool()(log_tool(get_or_create_category))
-mcp.tool()(log_tool(move_all_tasks_between_categories))
 # mcp.tool()(log_tool(add_multiple_tasks))
 
 # Register health check (no auth required)

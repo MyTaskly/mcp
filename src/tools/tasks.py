@@ -13,7 +13,8 @@ async def get_tasks(
     category_id: Optional[int] = None,
     priority: Optional[str] = None,
     status: Optional[str] = None,
-    task_id: Optional[int] = None
+    task_id: Optional[int] = None,
+    title: Optional[str] = None
 ) -> Dict[str, Any]:
     """Recupera i task dell'utente come JSON grezzo per uso interno (lookup, validazione, filtri).
 
@@ -21,6 +22,7 @@ async def get_tasks(
 
     Parameters:
     - task_id: ID specifico del task (per cercare un singolo task)
+    - title: Filtra per titolo con corrispondenza parziale case-insensitive — se più task corrispondono, li restituisce tutti
     - category_id: Filtra per ID categoria — se l'utente specifica il NOME, chiama prima get_my_categories() per ottenere l'ID
     - priority: Filtra per priorità — valori esatti: "Alta", "Media", "Bassa"
     - status: Filtra per stato — valori esatti: "In sospeso", "Completato", "Annullato"
@@ -30,18 +32,25 @@ async def get_tasks(
     - Verificare se un task esiste
     - Filtrare task per elaborazione interna
 
+    Attenzione nomi duplicati: se title restituisce più task, mostra i risultati all'utente e chiedi quale intende.
+
     Quando NON usare:
     - Se l'utente chiede "Mostrami i task" → usa show_tasks_to_user()
 
     Example:
         User: "Completa il task Riunione"
-        → get_tasks() per trovare task_id=12
+        → get_tasks(title="Riunione") per trovare task_id=12
         → complete_task(task_id=12)
     """
     user_id = authenticate_from_context(ctx)
 
     # Fetch tasks from FastAPI
     tasks = await task_client.get_tasks(user_id, category_id, priority, status, task_id)
+
+    # Filter by title (partial, case-insensitive) client-side
+    if title:
+        title_lower = title.lower()
+        tasks = [t for t in tasks if title_lower in t.get("title", "").lower()]
 
     return {
         "tasks": tasks,
@@ -139,84 +148,6 @@ async def get_task_stats(ctx: Context) -> Dict[str, Any]:
     return stats
 
 
-async def get_next_due_task(
-    ctx: Context,
-    limit: int = 1
-) -> Dict[str, Any]:
-    """Restituisce i task con le scadenze più vicine nel futuro, ordinati per data crescente.
-
-    Parameters:
-    - limit: Quanti task restituire (default: 1, max: 20)
-
-    Quando usare:
-    - "Qual è il prossimo task in scadenza?" → limit=1
-    - "Dammi le prossime 5 scadenze" → limit=5
-    - "Quando scade il mio prossimo impegno?"
-    """
-    user_id = authenticate_from_context(ctx)
-
-    # Validate limit
-    if limit < 1:
-        limit = 1
-    if limit > 20:
-        limit = 20
-
-    # Get all tasks
-    all_tasks = await task_client.get_tasks(user_id)
-    now = datetime.now(timezone.utc)
-
-    # Filter future tasks that are not completed
-    future_tasks = []
-    for task in all_tasks:
-        end_time_str = task.get("end_time")
-        if not end_time_str:
-            continue
-
-        try:
-            end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
-            if end_time.tzinfo is None:
-                end_time = end_time.replace(tzinfo=timezone.utc)
-
-            if end_time > now and task.get("status") != "Completato":
-                task["end_time_dt"] = end_time  # For sorting
-                future_tasks.append(task)
-        except Exception:
-            continue
-
-    if not future_tasks:
-        return {
-            "success": False,
-            "message": "Non ci sono task con scadenza futura",
-            "tasks": []
-        }
-
-    # Sort by end_time (closest first) and take top N
-    future_tasks.sort(key=lambda x: x["end_time_dt"])
-    selected_tasks = future_tasks[:limit]
-
-    # Remove the temporary sorting field
-    for task in selected_tasks:
-        if "end_time_dt" in task:
-            del task["end_time_dt"]
-
-    if limit == 1:
-        return {
-            "success": True,
-            "task": selected_tasks[0],
-            "tasks": selected_tasks,
-            "total_upcoming": len(future_tasks),
-            "message": f"Il prossimo task in scadenza è '{selected_tasks[0]['title']}' il {selected_tasks[0]['end_time']}"
-        }
-    else:
-        return {
-            "success": True,
-            "tasks": selected_tasks,
-            "total_upcoming": len(future_tasks),
-            "returned": len(selected_tasks),
-            "message": f"Prossimi {len(selected_tasks)} task in scadenza (su {len(future_tasks)} totali)"
-        }
-
-
 async def get_overdue_tasks(ctx: Context) -> List[Dict[str, Any]]:
     """Restituisce tutti i task non completati con scadenza già passata, ordinati dal più vecchio.
 
@@ -225,11 +156,9 @@ async def get_overdue_tasks(ctx: Context) -> List[Dict[str, Any]]:
     """
     user_id = authenticate_from_context(ctx)
 
-    # Get all tasks
     all_tasks = await task_client.get_tasks(user_id)
     now = datetime.now(timezone.utc)
 
-    # Filter overdue tasks
     overdue = []
     for task in all_tasks:
         end_time_str = task.get("end_time")
@@ -241,51 +170,51 @@ async def get_overdue_tasks(ctx: Context) -> List[Dict[str, Any]]:
             if end_time.tzinfo is None:
                 end_time = end_time.replace(tzinfo=timezone.utc)
 
-            # Only if not completed and past due
             if end_time < now and task.get("status") != "Completato":
-                days_overdue = (now - end_time).days
-                task["days_overdue"] = days_overdue
-                task["end_time_dt"] = end_time  # For sorting
+                task["days_overdue"] = (now - end_time).days
+                task["end_time_dt"] = end_time
                 overdue.append(task)
         except Exception:
             continue
 
-    # Sort by end_time (oldest first)
     overdue.sort(key=lambda x: x["end_time_dt"])
-
-    # Remove temporary sorting field
     for task in overdue:
-        if "end_time_dt" in task:
-            del task["end_time_dt"]
+        del task["end_time_dt"]
 
     return overdue
 
 
 async def get_upcoming_tasks(
     ctx: Context,
-    days: int = 7
-) -> List[Dict[str, Any]]:
-    """Restituisce i task non completati con scadenza nei prossimi N giorni, ordinati per data.
+    days: Optional[int] = None,
+    limit: Optional[int] = None
+) -> Dict[str, Any]:
+    """Restituisce i task non completati con scadenza futura, ordinati per data crescente.
 
     Parameters:
-    - days: Finestra temporale in giorni (default: 7)
+    - days: Filtra entro una finestra temporale in giorni (opzionale)
+    - limit: Numero massimo di task da restituire (opzionale)
+
+    Combinazioni utili:
+    - nessun parametro → tutti i task futuri
+    - days=7 → task che scadono nei prossimi 7 giorni
+    - limit=3 → i 3 task con scadenza più vicina in assoluto
+    - days=7, limit=3 → i 3 task più vicini entro questa settimana
 
     Quando usare:
+    - "Qual è il prossimo task?" → limit=1
     - "Cosa ho domani?" → days=1
     - "Cosa scade questa settimana?" → days=7
-    - "Mostra i prossimi impegni dei prossimi 30 giorni" → days=30
+    - "Dammi le prossime 5 scadenze" → limit=5
     """
+    from datetime import timedelta
+
     user_id = authenticate_from_context(ctx)
 
-    # Get all tasks
     all_tasks = await task_client.get_tasks(user_id)
     now = datetime.now(timezone.utc)
+    future_cutoff = now.replace(hour=23, minute=59, second=59) + timedelta(days=days) if days is not None else None
 
-    # Calculate future date (end of day N days from now)
-    from datetime import timedelta
-    future_date = now.replace(hour=23, minute=59, second=59) + timedelta(days=days)
-
-    # Filter upcoming tasks
     upcoming = []
     for task in all_tasks:
         end_time_str = task.get("end_time")
@@ -297,24 +226,30 @@ async def get_upcoming_tasks(
             if end_time.tzinfo is None:
                 end_time = end_time.replace(tzinfo=timezone.utc)
 
-            # Between now and future_date, not completed
-            if now < end_time <= future_date and task.get("status") != "Completato":
-                days_until_due = (end_time - now).days
-                task["days_until_due"] = days_until_due
-                task["end_time_dt"] = end_time  # For sorting
-                upcoming.append(task)
+            if end_time <= now or task.get("status") == "Completato":
+                continue
+            if future_cutoff is not None and end_time > future_cutoff:
+                continue
+
+            task["days_until_due"] = (end_time - now).days
+            task["end_time_dt"] = end_time
+            upcoming.append(task)
         except Exception:
             continue
 
-    # Sort by end_time (closest first)
     upcoming.sort(key=lambda x: x["end_time_dt"])
 
-    # Remove temporary sorting field
-    for task in upcoming:
-        if "end_time_dt" in task:
-            del task["end_time_dt"]
+    if limit is not None:
+        upcoming = upcoming[:limit]
 
-    return upcoming
+    for task in upcoming:
+        del task["end_time_dt"]
+
+    return {
+        "success": True,
+        "tasks": upcoming,
+        "total": len(upcoming)
+    }
 
 
 async def add_task(

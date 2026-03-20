@@ -92,63 +92,6 @@ async def update_category(
     }
 
 
-async def search_categories(
-    ctx: Context,
-    search_term: str,
-    max_suggestions: int = 5
-) -> Dict[str, Any]:
-    """Cerca una categoria per nome con corrispondenza fuzzy. Utile quando non si ricorda il nome esatto.
-
-    Restituisce corrispondenza esatta (se trovata) e categorie simili ordinate per similarità.
-
-    Parameters:
-    - search_term: Parte del nome della categoria da cercare (es: "lav" trova "Lavoro")
-    - max_suggestions: Numero massimo di suggerimenti (default: 5)
-
-    Examples:
-    - search_categories(search_term="lavoro") → trova "Lavoro" come esatta + simili
-    - search_categories(search_term="proj") → suggerisce "Progetti", "Progetto Casa"
-    """
-    user_id = authenticate_from_context(ctx)
-
-    # Get all categories
-    categories = await category_client.get_categories(user_id)
-
-    # Find exact match
-    exact_match = None
-    search_lower = search_term.lower().strip()
-    for cat in categories:
-        if cat["name"].lower() == search_lower:
-            exact_match = cat
-            break
-
-    # Find similar categories using simple substring matching
-    import difflib
-    similar_categories = []
-    for category in categories:
-        category_name_lower = category["name"].lower().strip()
-        ratio = difflib.SequenceMatcher(None, search_lower, category_name_lower).ratio()
-
-        if ratio > 0.3:  # Low threshold for suggestions
-            similar_categories.append({
-                "category": category,
-                "similarity": ratio
-            })
-
-    # Sort by similarity and limit
-    similar_categories.sort(key=lambda x: x["similarity"], reverse=True)
-    similar_categories = similar_categories[:max_suggestions]
-
-    return {
-        "success": True,
-        "search_term": search_term,
-        "exact_match": exact_match,
-        "similar_categories": [item["category"] for item in similar_categories],
-        "similarity_scores": [item["similarity"] for item in similar_categories],
-        "total_categories": len(categories),
-        "message": f"Found {len(similar_categories)} similar categories for '{search_term}'"
-    }
-
 
 async def show_category_details(
     ctx: Context,
