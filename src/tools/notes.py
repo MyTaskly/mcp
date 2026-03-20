@@ -1,10 +1,9 @@
 """MCP tools for note management."""
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from fastmcp import Context
 from src.auth import authenticate_from_context
 from src.client import note_client
-from src.formatters import format_notes_for_ui
 
 
 async def get_notes(ctx: Context) -> Dict[str, Any]:
@@ -139,9 +138,7 @@ async def delete_note(ctx: Context, note_id: int) -> Dict[str, Any]:
 
 
 async def show_notes_to_user(ctx: Context) -> Dict[str, Any]:
-    """Mostra le note all'utente nell'app mobile con formattazione UI completa a griglia.
-
-    Restituisce type="note_list" — l'app React Native renderizza automaticamente la griglia con colori e azioni.
+    """Mostra le note all'utente nell'app mobile. L'app legge il type e renderizza la griglia autonomamente.
 
     Quando usare:
     - "Mostrami le note", "Quali note ho?", "Fammi vedere i miei appunti"
@@ -149,12 +146,6 @@ async def show_notes_to_user(ctx: Context) -> Dict[str, Any]:
     Quando NON usare:
     - Per lookup interni o trovare un note_id → usa get_notes()
     """
-    user_id = authenticate_from_context(ctx)
+    authenticate_from_context(ctx)
 
-    # Get notes
-    notes = await note_client.get_notes(user_id)
-
-    # Format for UI
-    formatted_response = format_notes_for_ui(notes)
-
-    return formatted_response
+    return {"type": "note_list", "success": True}

@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from fastmcp import Context
 from src.auth import authenticate_from_context
 from src.client import task_client, category_client
-from src.formatters import format_tasks_for_ui
 
 
 async def get_tasks(
@@ -350,9 +349,7 @@ async def show_tasks_to_user(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Mostra i task all'utente nell'app mobile con formattazione UI completa e filtri.
-
-    Restituisce type="task_list" — l'app React Native renderizza automaticamente la lista formattata.
+    """Mostra i task all'utente nell'app mobile. L'app legge il type e renderizza la lista autonomamente.
 
     Parameters:
     - category_id: Filtra per ID categoria (opzionale)
@@ -371,63 +368,9 @@ async def show_tasks_to_user(
 
     Quando NON usare:
     - Per lookup interni o trovare un task_id → usa get_tasks()
-
-    Example:
-        User: "Mostra i task ad alta priorità"
-        → show_tasks_to_user(priority="Alta")
     """
-    user_id = authenticate_from_context(ctx)
+    authenticate_from_context(ctx)
 
-    # Get tasks with optional filters
-    tasks = await task_client.get_tasks(user_id, category_id, priority, status)
-
-    # Apply date filters
-    if due_date or start_date or end_date:
-        from datetime import datetime, timezone
-        filtered_tasks = []
-
-        for task in tasks:
-            end_time_str = task.get("end_time")
-            if not end_time_str:
-                continue
-
-            try:
-                end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
-                if end_time.tzinfo is None:
-                    end_time = end_time.replace(tzinfo=timezone.utc)
-
-                task_date = end_time.date()
-
-                # Filter by specific due_date
-                if due_date:
-                    filter_date = datetime.fromisoformat(due_date).date()
-                    if task_date == filter_date:
-                        filtered_tasks.append(task)
-                # Filter by date range
-                elif start_date or end_date:
-                    include_task = True
-
-                    if start_date:
-                        filter_start = datetime.fromisoformat(start_date).date()
-                        if task_date < filter_start:
-                            include_task = False
-
-                    if end_date and include_task:
-                        filter_end = datetime.fromisoformat(end_date).date()
-                        if task_date > filter_end:
-                            include_task = False
-
-                    if include_task:
-                        filtered_tasks.append(task)
-            except Exception:
-                continue
-
-        tasks = filtered_tasks
-
-    # Format for UI
-    formatted_response = format_tasks_for_ui(tasks)
-
-    # Add filters_applied metadata
     filters_applied = {}
     if category_id:
         filters_applied["category_id"] = category_id
@@ -438,10 +381,10 @@ async def show_tasks_to_user(
     if due_date:
         filters_applied["due_date"] = due_date
     if start_date or end_date:
-        date_range = f"{start_date or 'start'} to {end_date or 'end'}"
-        filters_applied["date_range"] = date_range
+        filters_applied["date_range"] = f"{start_date or 'start'} to {end_date or 'end'}"
 
-    if filters_applied:
-        formatted_response["filters_applied"] = filters_applied
-
-    return formatted_response
+    return {
+        "type": "task_list",
+        "success": True,
+        **({"filters_applied": filters_applied} if filters_applied else {})
+    }
