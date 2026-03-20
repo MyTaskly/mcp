@@ -88,7 +88,7 @@ async def update_task(
     """
     user_id = authenticate_from_context(ctx)
 
-    result = await task_client.update_task(
+    await task_client.update_task(
         user_id=user_id,
         task_id=task_id,
         title=title,
@@ -99,10 +99,7 @@ async def update_task(
         status=status
     )
 
-    return {
-        "message": f"✅ Task aggiornato con successo",
-        **result
-    }
+    return {"success": True, "task_id": task_id}
 
 
 async def complete_task(ctx: Context, task_id: int) -> Dict[str, Any]:
@@ -119,17 +116,9 @@ async def complete_task(ctx: Context, task_id: int) -> Dict[str, Any]:
     """
     user_id = authenticate_from_context(ctx)
 
-    # Update task status to Completato
-    result = await task_client.update_task(
-        user_id=user_id,
-        task_id=task_id,
-        status="Completato"
-    )
+    await task_client.update_task(user_id=user_id, task_id=task_id, status="Completato")
 
-    return {
-        "message": f"Task marked as completed",
-        **result
-    }
+    return {"success": True, "task_id": task_id}
 
 
 async def get_task_stats(ctx: Context) -> Dict[str, Any]:
@@ -284,7 +273,7 @@ async def add_task(
     if len(title) > 100:
         return {
             "success": False,
-            "message": f"❌ Titolo troppo lungo ({len(title)} caratteri). Massimo 100 caratteri. Usa una versione più breve o sposta i dettagli nella descrizione.",
+            "message": f"Title too long ({len(title)} chars). Max 100 chars. Move details to description.",
             "title_length": len(title),
             "max_length": 100
         }
@@ -308,7 +297,7 @@ async def add_task(
             category_names = [cat["name"] for cat in categories[:5]]
             return {
                 "success": False,
-                "message": f"❌ Categoria '{category_used}' non trovata. Categorie esistenti: {', '.join(category_names)}",
+                "message": f"Category '{category_used}' not found. Existing categories: {', '.join(category_names)}",
                 "category_suggestions": category_names,
                 "action_required": "ask_user_to_create_category"
             }
@@ -326,9 +315,7 @@ async def add_task(
 
         return {
             "success": True,
-            "type": "task_created",
-            "message": f"✅ Task '{title}' creato con successo in '{category_used}'",
-            "task": result,
+            "task_id": result.get("task_id"),
             "category_used": category_used
         }
     except Exception as e:

@@ -51,8 +51,7 @@ async def create_category(
     return {
         "success": True,
         "type": "category_created",
-        "message": f"✅ Categoria '{name}' creata con successo",
-        "category": result
+        "category_id": result.get("category_id")
     }
 
 
@@ -77,18 +76,9 @@ async def update_category(
         → update_category(category_id=5, new_name="Ufficio")
     """
     user_id = authenticate_from_context(ctx)
-    result = await category_client.update_category(
-        user_id,
-        category_id,
-        new_name,
-        new_description
-    )
+    await category_client.update_category(user_id, category_id, new_name, new_description)
 
-    final_name = new_name if new_name else "category"
-    return {
-        "message": f"Category updated successfully to '{final_name}'",
-        **result
-    }
+    return {"success": True, "category_id": category_id}
 
 
 

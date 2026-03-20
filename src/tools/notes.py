@@ -70,8 +70,7 @@ async def create_note(
     return {
         "success": True,
         "type": "note_created",
-        "message": "✅ Nota creata con successo",
-        "note": note
+        "note_id": note.get("note_id")
     }
 
 
@@ -99,7 +98,7 @@ async def update_note(
     """
     user_id = authenticate_from_context(ctx)
 
-    result = await note_client.update_note(
+    await note_client.update_note(
         user_id=user_id,
         note_id=note_id,
         title=title,
@@ -108,11 +107,7 @@ async def update_note(
         color=color
     )
 
-    return {
-        "message": "✅ Nota aggiornata con successo",
-        "note_id": note_id,
-        **result
-    }
+    return {"success": True, "note_id": note_id}
 
 
 async def delete_note(ctx: Context, note_id: int) -> Dict[str, Any]:
@@ -128,13 +123,9 @@ async def delete_note(ctx: Context, note_id: int) -> Dict[str, Any]:
     """
     user_id = authenticate_from_context(ctx)
 
-    result = await note_client.delete_note(user_id, note_id)
+    await note_client.delete_note(user_id, note_id)
 
-    return {
-        "message": "✅ Nota eliminata con successo",
-        "note_id": note_id,
-        **result
-    }
+    return {"success": True, "note_id": note_id}
 
 
 async def show_notes_to_user(ctx: Context) -> Dict[str, Any]:
