@@ -97,7 +97,8 @@ class TaskClient(BaseClient):
         end_time: Optional[str] = None,
         start_time: Optional[str] = None,
         description: Optional[str] = None,
-        priority: str = "Bassa"
+        priority: str = "Bassa",
+        duration_minutes: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Create a new task.
@@ -110,6 +111,7 @@ class TaskClient(BaseClient):
             start_time: Start date/time (optional)
             description: Task description
             priority: "Alta", "Media", or "Bassa" (default: "Bassa")
+            duration_minutes: Expected duration in minutes (optional)
 
         Returns:
             Created task dictionary
@@ -127,6 +129,8 @@ class TaskClient(BaseClient):
             data["end_time"] = end_time
         if start_time:
             data["start_time"] = start_time
+        if duration_minutes is not None:
+            data["duration_minutes"] = duration_minutes
 
         return await self._post("/tasks", token, json=data)
 
@@ -139,7 +143,8 @@ class TaskClient(BaseClient):
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
         priority: Optional[str] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None,
+        duration_minutes: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Update an existing task.
@@ -153,6 +158,7 @@ class TaskClient(BaseClient):
             end_time: New end time (optional)
             priority: New priority (optional)
             status: New status (optional)
+            duration_minutes: New duration in minutes (optional)
 
         Returns:
             Updated task dictionary
@@ -171,6 +177,8 @@ class TaskClient(BaseClient):
             data["priority"] = _normalize_priority(priority)
         if status is not None:
             data["status"] = _normalize_status(status)
+        if duration_minutes is not None:
+            data["duration_minutes"] = duration_minutes
 
         return await self._put(f"/tasks/{task_id}", token, json=data)
 
