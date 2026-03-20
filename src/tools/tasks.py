@@ -1,6 +1,6 @@
 """MCP tools for task management."""
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 from fastmcp import Context
 from src.auth import authenticate_from_context
@@ -136,7 +136,7 @@ async def get_task_stats(ctx: Context) -> Dict[str, Any]:
     return stats
 
 
-async def get_overdue_tasks(ctx: Context) -> List[Dict[str, Any]]:
+async def get_overdue_tasks(ctx: Context) -> Dict[str, Any]:
     """Restituisce tutti i task non completati con scadenza già passata, ordinati dal più vecchio.
 
     Quando usare:
@@ -169,7 +169,7 @@ async def get_overdue_tasks(ctx: Context) -> List[Dict[str, Any]]:
     for task in overdue:
         del task["end_time_dt"]
 
-    return overdue
+    return {"tasks": overdue, "total": len(overdue)}
 
 
 async def get_upcoming_tasks(
