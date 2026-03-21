@@ -49,7 +49,14 @@ def log_tool(fn):
 mcp = FastMCP(
     name=settings.mcp_server_name,
     version=settings.mcp_server_version,
-    instructions="MCP server for MyTaskly with OAuth 2.1 authentication and HTTP API integration"
+    instructions=(
+        "MyTaskly è un'app mobile di gestione produttività. "
+        "Questo server MCP permette di creare, consultare e modificare task, categorie e note dell'utente. "
+        "I task hanno titolo, priorità (Alta/Media/Bassa), stato (In sospeso/Completato/Annullato), scadenza e categoria. "
+        "Le categorie organizzano i task in gruppi (es. Lavoro, Casa, Sport). "
+        "Le note sono post-it digitali con testo libero e colore. "
+        "Usa i tool 'show_*' per visualizzare dati nell'app mobile, e i tool 'get_*' per elaborazione interna."
+    )
 )
 
 # Import and register all tools

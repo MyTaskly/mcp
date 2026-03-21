@@ -40,13 +40,16 @@ async def create_category(
     name: str,
     description: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Crea una nuova categoria per organizzare i task. Restituisce errore se esiste già.
+    """Crea una nuova categoria per organizzare i task.
 
     Parameters:
     - name: Nome della categoria (obbligatorio, es: "Lavoro", "Progetti", "Casa")
     - description: Descrizione opzionale (es: "Task relativi al lavoro")
 
     Restituisce type="category_created" — l'app mostra automaticamente il pulsante "Modifica categoria".
+
+    Se la categoria esiste già il backend restituisce un errore: informa l'utente e suggerisci
+    di usare la categoria esistente o di sceglierne un nome diverso. Non riprovare in automatico.
     """
     user_id = authenticate_from_context(ctx)
     result = await category_client.create_category(user_id, name, description)

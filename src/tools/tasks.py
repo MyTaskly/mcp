@@ -125,11 +125,18 @@ async def complete_task(ctx: Context, task_id: int) -> Dict[str, Any]:
 
 
 async def get_task_stats(ctx: Context) -> Dict[str, Any]:
-    """Restituisce statistiche aggregate sui task dell'utente: conteggi per stato, priorità e categoria.
+    """Restituisce statistiche aggregate sui task dell'utente.
+
+    Contiene conteggi per: stato (In sospeso / Completato / Annullato), priorità (Alta / Media / Bassa),
+    distribuzione per categoria, e totale complessivo dei task.
 
     Quando usare:
     - "Quanti task ho completato?", "Quanti task ad alta priorità ho?"
-    - "Qual è la mia categoria più carica?", "Come sto con la produttività?"
+    - "Qual è la mia categoria con più task?", "Dammi un riepilogo della mia produttività"
+    - "Quanti task ho in sospeso?"
+
+    Quando NON usare:
+    - Per vedere i task specifici → usa get_tasks() o show_tasks_to_user()
     """
     user_id = authenticate_from_context(ctx)
 
@@ -139,10 +146,14 @@ async def get_task_stats(ctx: Context) -> Dict[str, Any]:
 
 
 async def get_overdue_tasks(ctx: Context) -> Dict[str, Any]:
-    """Restituisce tutti i task non completati con scadenza già passata, ordinati dal più vecchio.
+    """Restituisce tutti i task non completati con scadenza già passata, ordinati dal più vecchio al più recente.
+
+    Ogni task nel risultato include il campo `days_overdue` (interi di giorni trascorsi dalla scadenza).
+    I task senza data di scadenza sono esclusi automaticamente.
 
     Quando usare:
     - "Quali task ho scaduto?", "Mostra i task in ritardo", "Quali impegni ho mancato?"
+    - "Ho task arretrati?"
     """
     user_id = authenticate_from_context(ctx)
 
@@ -185,6 +196,9 @@ async def get_upcoming_tasks(
     Parameters:
     - days: Filtra entro una finestra temporale in giorni (opzionale)
     - limit: Numero massimo di task da restituire (opzionale)
+
+    Ogni task nel risultato include il campo `days_until_due` (giorni interi alla scadenza).
+    I task senza data di scadenza e quelli già scaduti sono esclusi automaticamente.
 
     Combinazioni utili:
     - nessun parametro → tutti i task futuri
@@ -266,6 +280,10 @@ async def add_task(
 
     Regola titolo/descrizione: il titolo identifica, la descrizione spiega.
     Metti SEMPRE i dettagli nella descrizione, non nel titolo.
+
+    Flusso se categoria non trovata: il tool restituisce `"success": false` con `category_suggestions`.
+    In quel caso mostra i suggerimenti all'utente e chiedi se vuole creare la categoria o usarne una esistente.
+    Se conferma la creazione → chiama create_category() → poi richiama add_task().
 
     Examples:
     - add_task(title="Riunione team", end_time="2026-03-20 10:00:00", description="Meeting settimanale")

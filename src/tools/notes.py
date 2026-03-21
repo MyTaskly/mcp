@@ -87,7 +87,7 @@ async def update_note(
     Parameters:
     - note_id: ID della nota da aggiornare — ottienilo con get_notes() (obbligatorio)
     - title: Nuovo testo completo della nota (opzionale, lunghezza illimitata)
-    - color: Nuovo colore hex (opzionale) — "#FFEB3B" giallo, "#FF9800" arancione, "#4CAF50" verde, "#2196F3" blu
+    - color: Nuovo colore hex (opzionale) — "#FFEB3B" giallo, "#FF9800" arancione, "#4CAF50" verde, "#2196F3" blu, "#E91E63" rosa, "#9C27B0" viola
     - position_x: Nuova posizione X nel canvas (opzionale)
     - position_y: Nuova posizione Y nel canvas (opzionale)
 
@@ -111,7 +111,10 @@ async def update_note(
 
 
 async def delete_note(ctx: Context, note_id: int) -> Dict[str, Any]:
-    """Elimina definitivamente una nota. Operazione irreversibile.
+    """Elimina definitivamente una nota. Operazione irreversibile — la nota non può essere recuperata.
+
+    IMPORTANTE: chiedi sempre conferma esplicita all'utente prima di chiamare questo tool.
+    Non eliminare mai in automatico senza che l'utente abbia confermato.
 
     Parameters:
     - note_id: ID della nota da eliminare — ottienilo con get_notes() se non lo conosci
@@ -119,6 +122,7 @@ async def delete_note(ctx: Context, note_id: int) -> Dict[str, Any]:
     Example:
         User: "Elimina la nota sul latte"
         → get_notes() → trova note_id=5 "Comprare il latte"
+        → [chiedi conferma: "Vuoi eliminare la nota 'Comprare il latte'?"]
         → delete_note(note_id=5)
     """
     user_id = authenticate_from_context(ctx)
