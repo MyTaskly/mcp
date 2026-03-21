@@ -1,10 +1,9 @@
 """MCP tools for note management."""
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from fastmcp import Context
 from src.auth import authenticate_from_context
 from src.client import note_client
-from src.formatters import format_notes_for_ui
 
 
 async def get_notes(ctx: Context) -> Dict[str, Any]:
@@ -71,8 +70,7 @@ async def create_note(
     return {
         "success": True,
         "type": "note_created",
-        "message": "✅ Nota creata con successo",
-        "note": note
+        "note_id": note.get("note_id")
     }
 
 
@@ -89,7 +87,7 @@ async def update_note(
     Parameters:
     - note_id: ID della nota da aggiornare — ottienilo con get_notes() (obbligatorio)
     - title: Nuovo testo completo della nota (opzionale, lunghezza illimitata)
-    - color: Nuovo colore hex (opzionale) — "#FFEB3B" giallo, "#FF9800" arancione, "#4CAF50" verde, "#2196F3" blu
+    - color: Nuovo colore hex (opzionale) — "#FFEB3B" giallo, "#FF9800" arancione, "#4CAF50" verde, "#2196F3" blu, "#E91E63" rosa, "#9C27B0" viola
     - position_x: Nuova posizione X nel canvas (opzionale)
     - position_y: Nuova posizione Y nel canvas (opzionale)
 
@@ -100,7 +98,7 @@ async def update_note(
     """
     user_id = authenticate_from_context(ctx)
 
-    result = await note_client.update_note(
+    await note_client.update_note(
         user_id=user_id,
         note_id=note_id,
         title=title,
@@ -109,15 +107,14 @@ async def update_note(
         color=color
     )
 
-    return {
-        "message": "✅ Nota aggiornata con successo",
-        "note_id": note_id,
-        **result
-    }
+    return {"success": True, "note_id": note_id}
 
 
 async def delete_note(ctx: Context, note_id: int) -> Dict[str, Any]:
-    """Elimina definitivamente una nota. Operazione irreversibile.
+    """Elimina definitivamente una nota. Operazione irreversibile — la nota non può essere recuperata.
+
+    IMPORTANTE: chiedi sempre conferma esplicita all'utente prima di chiamare questo tool.
+    Non eliminare mai in automatico senza che l'utente abbia confermato.
 
     Parameters:
     - note_id: ID della nota da eliminare — ottienilo con get_notes() se non lo conosci
@@ -125,23 +122,18 @@ async def delete_note(ctx: Context, note_id: int) -> Dict[str, Any]:
     Example:
         User: "Elimina la nota sul latte"
         → get_notes() → trova note_id=5 "Comprare il latte"
+        → [chiedi conferma: "Vuoi eliminare la nota 'Comprare il latte'?"]
         → delete_note(note_id=5)
     """
     user_id = authenticate_from_context(ctx)
 
-    result = await note_client.delete_note(user_id, note_id)
+    await note_client.delete_note(user_id, note_id)
 
-    return {
-        "message": "✅ Nota eliminata con successo",
-        "note_id": note_id,
-        **result
-    }
+    return {"success": True, "note_id": note_id}
 
 
 async def show_notes_to_user(ctx: Context) -> Dict[str, Any]:
-    """Mostra le note all'utente nell'app mobile con formattazione UI completa a griglia.
-
-    Restituisce type="note_list" — l'app React Native renderizza automaticamente la griglia con colori e azioni.
+    """Mostra le note all'utente nell'app mobile. L'app legge il type e renderizza la griglia autonomamente.
 
     Quando usare:
     - "Mostrami le note", "Quali note ho?", "Fammi vedere i miei appunti"
@@ -149,12 +141,6 @@ async def show_notes_to_user(ctx: Context) -> Dict[str, Any]:
     Quando NON usare:
     - Per lookup interni o trovare un note_id → usa get_notes()
     """
-    user_id = authenticate_from_context(ctx)
+    authenticate_from_context(ctx)
 
-    # Get notes
-    notes = await note_client.get_notes(user_id)
-
-    # Format for UI
-    formatted_response = format_notes_for_ui(notes)
-
-    return formatted_response
+    return {"type": "note_list", "success": True}

@@ -1,11 +1,10 @@
 """MCP tools for task management."""
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 from fastmcp import Context
 from src.auth import authenticate_from_context
 from src.client import task_client, category_client
-from src.formatters import format_tasks_for_ui
 
 
 async def get_tasks(
@@ -13,7 +12,8 @@ async def get_tasks(
     category_id: Optional[int] = None,
     priority: Optional[str] = None,
     status: Optional[str] = None,
-    task_id: Optional[int] = None
+    task_id: Optional[int] = None,
+    title: Optional[str] = None
 ) -> Dict[str, Any]:
     """Recupera i task dell'utente come JSON grezzo per uso interno (lookup, validazione, filtri).
 
@@ -21,6 +21,7 @@ async def get_tasks(
 
     Parameters:
     - task_id: ID specifico del task (per cercare un singolo task)
+    - title: Filtra per titolo con corrispondenza parziale case-insensitive — se più task corrispondono, li restituisce tutti
     - category_id: Filtra per ID categoria — se l'utente specifica il NOME, chiama prima get_my_categories() per ottenere l'ID
     - priority: Filtra per priorità — valori esatti: "Alta", "Media", "Bassa"
     - status: Filtra per stato — valori esatti: "In sospeso", "Completato", "Annullato"
@@ -30,18 +31,28 @@ async def get_tasks(
     - Verificare se un task esiste
     - Filtrare task per elaborazione interna
 
+    Attenzione nomi duplicati: se title restituisce più task, mostra i risultati all'utente e chiedi quale intende.
+
     Quando NON usare:
     - Se l'utente chiede "Mostrami i task" → usa show_tasks_to_user()
 
     Example:
         User: "Completa il task Riunione"
-        → get_tasks() per trovare task_id=12
+        → get_tasks(title="Riunione") per trovare task_id=12
         → complete_task(task_id=12)
     """
     user_id = authenticate_from_context(ctx)
 
     # Fetch tasks from FastAPI
     tasks = await task_client.get_tasks(user_id, category_id, priority, status, task_id)
+
+    # Filter by title (partial, case-insensitive) client-side
+    if title:
+        title_lower = title.lower()
+        tasks = [t for t in tasks if title_lower in t.get("title", "").lower()]
+
+    for task in tasks:
+        task.pop("user", None)
 
     return {
         "tasks": tasks,
@@ -80,7 +91,7 @@ async def update_task(
     """
     user_id = authenticate_from_context(ctx)
 
-    result = await task_client.update_task(
+    await task_client.update_task(
         user_id=user_id,
         task_id=task_id,
         title=title,
@@ -91,10 +102,7 @@ async def update_task(
         status=status
     )
 
-    return {
-        "message": f"✅ Task aggiornato con successo",
-        **result
-    }
+    return {"success": True, "task_id": task_id}
 
 
 async def complete_task(ctx: Context, task_id: int) -> Dict[str, Any]:
@@ -111,125 +119,47 @@ async def complete_task(ctx: Context, task_id: int) -> Dict[str, Any]:
     """
     user_id = authenticate_from_context(ctx)
 
-    # Update task status to Completato
-    result = await task_client.update_task(
-        user_id=user_id,
-        task_id=task_id,
-        status="Completato"
-    )
+    await task_client.update_task(user_id=user_id, task_id=task_id, status="Completato")
 
-    return {
-        "message": f"Task marked as completed",
-        **result
-    }
+    return {"success": True, "task_id": task_id}
 
 
 async def get_task_stats(ctx: Context) -> Dict[str, Any]:
-    """Restituisce statistiche aggregate sui task dell'utente: conteggi per stato, priorità e categoria.
+    """Restituisce statistiche aggregate sui task dell'utente.
+
+    Contiene conteggi per: stato (In sospeso / Completato / Annullato), priorità (Alta / Media / Bassa),
+    distribuzione per categoria, e totale complessivo dei task.
 
     Quando usare:
     - "Quanti task ho completato?", "Quanti task ad alta priorità ho?"
-    - "Qual è la mia categoria più carica?", "Come sto con la produttività?"
+    - "Qual è la mia categoria con più task?", "Dammi un riepilogo della mia produttività"
+    - "Quanti task ho in sospeso?"
+
+    Quando NON usare:
+    - Per vedere i task specifici → usa get_tasks() o show_tasks_to_user()
     """
     user_id = authenticate_from_context(ctx)
 
-    # Get statistics from FastAPI
     stats = await task_client.get_task_statistics(user_id)
 
-    return stats
+    return {"success": True, **stats}
 
 
-async def get_next_due_task(
-    ctx: Context,
-    limit: int = 1
-) -> Dict[str, Any]:
-    """Restituisce i task con le scadenze più vicine nel futuro, ordinati per data crescente.
+async def get_overdue_tasks(ctx: Context) -> Dict[str, Any]:
+    """Restituisce tutti i task non completati con scadenza già passata, ordinati dal più vecchio al più recente.
 
-    Parameters:
-    - limit: Quanti task restituire (default: 1, max: 20)
-
-    Quando usare:
-    - "Qual è il prossimo task in scadenza?" → limit=1
-    - "Dammi le prossime 5 scadenze" → limit=5
-    - "Quando scade il mio prossimo impegno?"
-    """
-    user_id = authenticate_from_context(ctx)
-
-    # Validate limit
-    if limit < 1:
-        limit = 1
-    if limit > 20:
-        limit = 20
-
-    # Get all tasks
-    all_tasks = await task_client.get_tasks(user_id)
-    now = datetime.now(timezone.utc)
-
-    # Filter future tasks that are not completed
-    future_tasks = []
-    for task in all_tasks:
-        end_time_str = task.get("end_time")
-        if not end_time_str:
-            continue
-
-        try:
-            end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
-            if end_time.tzinfo is None:
-                end_time = end_time.replace(tzinfo=timezone.utc)
-
-            if end_time > now and task.get("status") != "Completato":
-                task["end_time_dt"] = end_time  # For sorting
-                future_tasks.append(task)
-        except Exception:
-            continue
-
-    if not future_tasks:
-        return {
-            "success": False,
-            "message": "Non ci sono task con scadenza futura",
-            "tasks": []
-        }
-
-    # Sort by end_time (closest first) and take top N
-    future_tasks.sort(key=lambda x: x["end_time_dt"])
-    selected_tasks = future_tasks[:limit]
-
-    # Remove the temporary sorting field
-    for task in selected_tasks:
-        if "end_time_dt" in task:
-            del task["end_time_dt"]
-
-    if limit == 1:
-        return {
-            "success": True,
-            "task": selected_tasks[0],
-            "tasks": selected_tasks,
-            "total_upcoming": len(future_tasks),
-            "message": f"Il prossimo task in scadenza è '{selected_tasks[0]['title']}' il {selected_tasks[0]['end_time']}"
-        }
-    else:
-        return {
-            "success": True,
-            "tasks": selected_tasks,
-            "total_upcoming": len(future_tasks),
-            "returned": len(selected_tasks),
-            "message": f"Prossimi {len(selected_tasks)} task in scadenza (su {len(future_tasks)} totali)"
-        }
-
-
-async def get_overdue_tasks(ctx: Context) -> List[Dict[str, Any]]:
-    """Restituisce tutti i task non completati con scadenza già passata, ordinati dal più vecchio.
+    Ogni task nel risultato include il campo `days_overdue` (interi di giorni trascorsi dalla scadenza).
+    I task senza data di scadenza sono esclusi automaticamente.
 
     Quando usare:
     - "Quali task ho scaduto?", "Mostra i task in ritardo", "Quali impegni ho mancato?"
+    - "Ho task arretrati?"
     """
     user_id = authenticate_from_context(ctx)
 
-    # Get all tasks
     all_tasks = await task_client.get_tasks(user_id)
     now = datetime.now(timezone.utc)
 
-    # Filter overdue tasks
     overdue = []
     for task in all_tasks:
         end_time_str = task.get("end_time")
@@ -241,51 +171,55 @@ async def get_overdue_tasks(ctx: Context) -> List[Dict[str, Any]]:
             if end_time.tzinfo is None:
                 end_time = end_time.replace(tzinfo=timezone.utc)
 
-            # Only if not completed and past due
             if end_time < now and task.get("status") != "Completato":
-                days_overdue = (now - end_time).days
-                task["days_overdue"] = days_overdue
-                task["end_time_dt"] = end_time  # For sorting
+                task["days_overdue"] = (now - end_time).days
+                task["end_time_dt"] = end_time
                 overdue.append(task)
         except Exception:
             continue
 
-    # Sort by end_time (oldest first)
     overdue.sort(key=lambda x: x["end_time_dt"])
-
-    # Remove temporary sorting field
     for task in overdue:
-        if "end_time_dt" in task:
-            del task["end_time_dt"]
+        del task["end_time_dt"]
+        task.pop("user", None)
 
-    return overdue
+    return {"tasks": overdue, "total": len(overdue)}
 
 
 async def get_upcoming_tasks(
     ctx: Context,
-    days: int = 7
-) -> List[Dict[str, Any]]:
-    """Restituisce i task non completati con scadenza nei prossimi N giorni, ordinati per data.
+    days: Optional[int] = None,
+    limit: Optional[int] = None
+) -> Dict[str, Any]:
+    """Restituisce i task non completati con scadenza futura, ordinati per data crescente.
 
     Parameters:
-    - days: Finestra temporale in giorni (default: 7)
+    - days: Filtra entro una finestra temporale in giorni (opzionale)
+    - limit: Numero massimo di task da restituire (opzionale)
+
+    Ogni task nel risultato include il campo `days_until_due` (giorni interi alla scadenza).
+    I task senza data di scadenza e quelli già scaduti sono esclusi automaticamente.
+
+    Combinazioni utili:
+    - nessun parametro → tutti i task futuri
+    - days=7 → task che scadono nei prossimi 7 giorni
+    - limit=3 → i 3 task con scadenza più vicina in assoluto
+    - days=7, limit=3 → i 3 task più vicini entro questa settimana
 
     Quando usare:
+    - "Qual è il prossimo task?" → limit=1
     - "Cosa ho domani?" → days=1
     - "Cosa scade questa settimana?" → days=7
-    - "Mostra i prossimi impegni dei prossimi 30 giorni" → days=30
+    - "Dammi le prossime 5 scadenze" → limit=5
     """
+    from datetime import timedelta
+
     user_id = authenticate_from_context(ctx)
 
-    # Get all tasks
     all_tasks = await task_client.get_tasks(user_id)
     now = datetime.now(timezone.utc)
+    future_cutoff = now.replace(hour=23, minute=59, second=59) + timedelta(days=days) if days is not None else None
 
-    # Calculate future date (end of day N days from now)
-    from datetime import timedelta
-    future_date = now.replace(hour=23, minute=59, second=59) + timedelta(days=days)
-
-    # Filter upcoming tasks
     upcoming = []
     for task in all_tasks:
         end_time_str = task.get("end_time")
@@ -297,24 +231,31 @@ async def get_upcoming_tasks(
             if end_time.tzinfo is None:
                 end_time = end_time.replace(tzinfo=timezone.utc)
 
-            # Between now and future_date, not completed
-            if now < end_time <= future_date and task.get("status") != "Completato":
-                days_until_due = (end_time - now).days
-                task["days_until_due"] = days_until_due
-                task["end_time_dt"] = end_time  # For sorting
-                upcoming.append(task)
+            if end_time <= now or task.get("status") == "Completato":
+                continue
+            if future_cutoff is not None and end_time > future_cutoff:
+                continue
+
+            task["days_until_due"] = (end_time - now).days
+            task["end_time_dt"] = end_time
+            upcoming.append(task)
         except Exception:
             continue
 
-    # Sort by end_time (closest first)
     upcoming.sort(key=lambda x: x["end_time_dt"])
 
-    # Remove temporary sorting field
-    for task in upcoming:
-        if "end_time_dt" in task:
-            del task["end_time_dt"]
+    if limit is not None:
+        upcoming = upcoming[:limit]
 
-    return upcoming
+    for task in upcoming:
+        del task["end_time_dt"]
+        task.pop("user", None)
+
+    return {
+        "success": True,
+        "tasks": upcoming,
+        "total": len(upcoming)
+    }
 
 
 async def add_task(
@@ -340,6 +281,10 @@ async def add_task(
     Regola titolo/descrizione: il titolo identifica, la descrizione spiega.
     Metti SEMPRE i dettagli nella descrizione, non nel titolo.
 
+    Flusso se categoria non trovata: il tool restituisce `"success": false` con `category_suggestions`.
+    In quel caso mostra i suggerimenti all'utente e chiedi se vuole creare la categoria o usarne una esistente.
+    Se conferma la creazione → chiama create_category() → poi richiama add_task().
+
     Examples:
     - add_task(title="Riunione team", end_time="2026-03-20 10:00:00", description="Meeting settimanale")
     - add_task(title="Palestra", category_name="Sport", end_time="2026-03-20 18:00:00", duration_minutes=60)
@@ -350,7 +295,7 @@ async def add_task(
     if len(title) > 100:
         return {
             "success": False,
-            "message": f"❌ Titolo troppo lungo ({len(title)} caratteri). Massimo 100 caratteri. Usa una versione più breve o sposta i dettagli nella descrizione.",
+            "message": f"Title too long ({len(title)} chars). Max 100 chars. Move details to description.",
             "title_length": len(title),
             "max_length": 100
         }
@@ -374,7 +319,7 @@ async def add_task(
             category_names = [cat["name"] for cat in categories[:5]]
             return {
                 "success": False,
-                "message": f"❌ Categoria '{category_used}' non trovata. Categorie esistenti: {', '.join(category_names)}",
+                "message": f"Category '{category_used}' not found. Existing categories: {', '.join(category_names)}",
                 "category_suggestions": category_names,
                 "action_required": "ask_user_to_create_category"
             }
@@ -392,9 +337,7 @@ async def add_task(
 
         return {
             "success": True,
-            "type": "task_created",
-            "message": f"✅ Task '{title}' creato con successo in '{category_used}'",
-            "task": result,
+            "task_id": result.get("task_id"),
             "category_used": category_used
         }
     except Exception as e:
@@ -415,9 +358,7 @@ async def show_tasks_to_user(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Mostra i task all'utente nell'app mobile con formattazione UI completa e filtri.
-
-    Restituisce type="task_list" — l'app React Native renderizza automaticamente la lista formattata.
+    """Mostra i task all'utente nell'app mobile. L'app legge il type e renderizza la lista autonomamente.
 
     Parameters:
     - category_id: Filtra per ID categoria (opzionale)
@@ -436,63 +377,9 @@ async def show_tasks_to_user(
 
     Quando NON usare:
     - Per lookup interni o trovare un task_id → usa get_tasks()
-
-    Example:
-        User: "Mostra i task ad alta priorità"
-        → show_tasks_to_user(priority="Alta")
     """
-    user_id = authenticate_from_context(ctx)
+    authenticate_from_context(ctx)
 
-    # Get tasks with optional filters
-    tasks = await task_client.get_tasks(user_id, category_id, priority, status)
-
-    # Apply date filters
-    if due_date or start_date or end_date:
-        from datetime import datetime, timezone
-        filtered_tasks = []
-
-        for task in tasks:
-            end_time_str = task.get("end_time")
-            if not end_time_str:
-                continue
-
-            try:
-                end_time = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
-                if end_time.tzinfo is None:
-                    end_time = end_time.replace(tzinfo=timezone.utc)
-
-                task_date = end_time.date()
-
-                # Filter by specific due_date
-                if due_date:
-                    filter_date = datetime.fromisoformat(due_date).date()
-                    if task_date == filter_date:
-                        filtered_tasks.append(task)
-                # Filter by date range
-                elif start_date or end_date:
-                    include_task = True
-
-                    if start_date:
-                        filter_start = datetime.fromisoformat(start_date).date()
-                        if task_date < filter_start:
-                            include_task = False
-
-                    if end_date and include_task:
-                        filter_end = datetime.fromisoformat(end_date).date()
-                        if task_date > filter_end:
-                            include_task = False
-
-                    if include_task:
-                        filtered_tasks.append(task)
-            except Exception:
-                continue
-
-        tasks = filtered_tasks
-
-    # Format for UI
-    formatted_response = format_tasks_for_ui(tasks)
-
-    # Add filters_applied metadata
     filters_applied = {}
     if category_id:
         filters_applied["category_id"] = category_id
@@ -503,10 +390,10 @@ async def show_tasks_to_user(
     if due_date:
         filters_applied["due_date"] = due_date
     if start_date or end_date:
-        date_range = f"{start_date or 'start'} to {end_date or 'end'}"
-        filters_applied["date_range"] = date_range
+        filters_applied["date_range"] = f"{start_date or 'start'} to {end_date or 'end'}"
 
-    if filters_applied:
-        formatted_response["filters_applied"] = filters_applied
-
-    return formatted_response
+    return {
+        "type": "task_list",
+        "success": True,
+        **({"filters_applied": filters_applied} if filters_applied else {})
+    }

@@ -3,8 +3,7 @@
 from typing import Dict, Any, Optional
 from fastmcp import Context
 from src.auth import authenticate_from_context
-from src.client import category_client, task_client
-from src.formatters import format_categories_for_ui
+from src.client import category_client
 
 
 async def get_my_categories(ctx: Context) -> Dict[str, Any]:
@@ -27,6 +26,9 @@ async def get_my_categories(ctx: Context) -> Dict[str, Any]:
     user_id = authenticate_from_context(ctx)
     categories = await category_client.get_categories(user_id)
 
+    for cat in categories:
+        cat.pop("user_id", None)
+
     return {
         "categories": categories,
         "total": len(categories)
@@ -38,13 +40,16 @@ async def create_category(
     name: str,
     description: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Crea una nuova categoria per organizzare i task. Restituisce errore se esiste già.
+    """Crea una nuova categoria per organizzare i task.
 
     Parameters:
     - name: Nome della categoria (obbligatorio, es: "Lavoro", "Progetti", "Casa")
     - description: Descrizione opzionale (es: "Task relativi al lavoro")
 
     Restituisce type="category_created" — l'app mostra automaticamente il pulsante "Modifica categoria".
+
+    Se la categoria esiste già il backend restituisce un errore: informa l'utente e suggerisci
+    di usare la categoria esistente o di sceglierne un nome diverso. Non riprovare in automatico.
     """
     user_id = authenticate_from_context(ctx)
     result = await category_client.create_category(user_id, name, description)
@@ -52,8 +57,7 @@ async def create_category(
     return {
         "success": True,
         "type": "category_created",
-        "message": f"✅ Categoria '{name}' creata con successo",
-        "category": result
+        "category_id": result.get("category_id")
     }
 
 
@@ -78,76 +82,10 @@ async def update_category(
         → update_category(category_id=5, new_name="Ufficio")
     """
     user_id = authenticate_from_context(ctx)
-    result = await category_client.update_category(
-        user_id,
-        category_id,
-        new_name,
-        new_description
-    )
+    await category_client.update_category(user_id, category_id, new_name, new_description)
 
-    final_name = new_name if new_name else "category"
-    return {
-        "message": f"Category updated successfully to '{final_name}'",
-        **result
-    }
+    return {"success": True, "category_id": category_id}
 
-
-async def search_categories(
-    ctx: Context,
-    search_term: str,
-    max_suggestions: int = 5
-) -> Dict[str, Any]:
-    """Cerca una categoria per nome con corrispondenza fuzzy. Utile quando non si ricorda il nome esatto.
-
-    Restituisce corrispondenza esatta (se trovata) e categorie simili ordinate per similarità.
-
-    Parameters:
-    - search_term: Parte del nome della categoria da cercare (es: "lav" trova "Lavoro")
-    - max_suggestions: Numero massimo di suggerimenti (default: 5)
-
-    Examples:
-    - search_categories(search_term="lavoro") → trova "Lavoro" come esatta + simili
-    - search_categories(search_term="proj") → suggerisce "Progetti", "Progetto Casa"
-    """
-    user_id = authenticate_from_context(ctx)
-
-    # Get all categories
-    categories = await category_client.get_categories(user_id)
-
-    # Find exact match
-    exact_match = None
-    search_lower = search_term.lower().strip()
-    for cat in categories:
-        if cat["name"].lower() == search_lower:
-            exact_match = cat
-            break
-
-    # Find similar categories using simple substring matching
-    import difflib
-    similar_categories = []
-    for category in categories:
-        category_name_lower = category["name"].lower().strip()
-        ratio = difflib.SequenceMatcher(None, search_lower, category_name_lower).ratio()
-
-        if ratio > 0.3:  # Low threshold for suggestions
-            similar_categories.append({
-                "category": category,
-                "similarity": ratio
-            })
-
-    # Sort by similarity and limit
-    similar_categories.sort(key=lambda x: x["similarity"], reverse=True)
-    similar_categories = similar_categories[:max_suggestions]
-
-    return {
-        "success": True,
-        "search_term": search_term,
-        "exact_match": exact_match,
-        "similar_categories": [item["category"] for item in similar_categories],
-        "similarity_scores": [item["similarity"] for item in similar_categories],
-        "total_categories": len(categories),
-        "message": f"Found {len(similar_categories)} similar categories for '{search_term}'"
-    }
 
 
 async def show_category_details(
@@ -155,9 +93,8 @@ async def show_category_details(
     category_name: Optional[str] = None,
     category_id: Optional[int] = None
 ) -> Dict[str, Any]:
-    """Mostra i dettagli di una singola categoria nell'app mobile con statistiche dei task.
+    """Mostra i dettagli di una singola categoria nell'app mobile. L'app legge il type e renderizza autonomamente.
 
-    Restituisce type="category_details" con conteggio task, breakdown per stato e priorità.
     Specifica category_name OPPURE category_id, non entrambi.
 
     Parameters:
@@ -165,86 +102,23 @@ async def show_category_details(
     - category_id: ID della categoria — alternativo a category_name
 
     Quando usare:
-    - "Mostrami la categoria Lavoro", "Dettagli di Personale", "Quanti task ho in Lavoro?"
+    - "Mostrami la categoria Lavoro", "Dettagli di Personale"
 
     Quando NON usare:
     - Per vedere tutte le categorie → usa show_categories_to_user()
     """
-    user_id = authenticate_from_context(ctx)
-
-    # Get all categories
-    categories = await category_client.get_categories(user_id)
-
-    # Find the specific category
-    selected_category = None
-    if category_name:
-        for cat in categories:
-            if cat["name"].lower() == category_name.lower():
-                selected_category = cat
-                break
-    elif category_id:
-        for cat in categories:
-            if cat["category_id"] == category_id:
-                selected_category = cat
-                break
-
-    if not selected_category:
-        search_term = category_name or str(category_id)
-        return {
-            "type": "category_details",
-            "version": "1.0",
-            "error": f"Categoria '{search_term}' non trovata",
-            "voice_summary": f"Categoria {search_term} non trovata"
-        }
-
-    # Get all tasks for this category
-    cat_id = selected_category["category_id"]
-    all_tasks = await task_client.get_tasks(user_id, category_id=cat_id)
-
-    # Calculate task breakdown
-    task_breakdown = {
-        "pending": sum(1 for t in all_tasks if t.get("status") == "In sospeso"),
-        "completed": sum(1 for t in all_tasks if t.get("status") == "Completato"),
-        "cancelled": sum(1 for t in all_tasks if t.get("status") == "Annullato"),
-        "high_priority": sum(1 for t in all_tasks if t.get("priority") == "Alta"),
-        "medium_priority": sum(1 for t in all_tasks if t.get("priority") == "Media"),
-        "low_priority": sum(1 for t in all_tasks if t.get("priority") == "Bassa")
-    }
-
-    task_count = len(all_tasks)
-    cat_name = selected_category["name"]
-
-    # Create voice summary
-    voice_summary = f"Categoria {cat_name} con {task_count} task"
-    if task_breakdown["pending"] > 0:
-        voice_summary += f", di cui {task_breakdown['pending']} in sospeso"
-    if task_breakdown["high_priority"] > 0:
-        voice_summary += f" e {task_breakdown['high_priority']} ad alta priorità"
-    voice_summary += "."
+    authenticate_from_context(ctx)
 
     return {
         "type": "category_details",
-        "version": "1.0",
-        "category": {
-            "id": cat_id,
-            "name": cat_name,
-            "description": selected_category.get("description", ""),
-            "taskCount": task_count,
-            "userId": selected_category.get("user_id")
-        },
-        "task_breakdown": task_breakdown,
-        "voice_summary": voice_summary,
-        "ui_hints": {
-            "enable_edit": True,
-            "enable_view_tasks": task_count > 0
-        }
+        "success": True,
+        **({"category_name": category_name} if category_name else {}),
+        **({"category_id": category_id} if category_id else {})
     }
 
 
 async def show_categories_to_user(ctx: Context) -> Dict[str, Any]:
-    """Mostra tutte le categorie all'utente nell'app mobile con conteggio task e formattazione UI.
-
-    Restituisce type="category_list" — l'app React Native renderizza automaticamente la griglia.
+    """Mostra tutte le categorie all'utente nell'app mobile. L'app legge il type e renderizza la griglia autonomamente.
 
     Quando usare:
     - "Mostrami le categorie", "Quali categorie ho?", "Fammi vedere le categorie"
@@ -252,24 +126,6 @@ async def show_categories_to_user(ctx: Context) -> Dict[str, Any]:
     Quando NON usare:
     - Per lookup interni o trovare un category_id → usa get_my_categories()
     """
-    user_id = authenticate_from_context(ctx)
+    authenticate_from_context(ctx)
 
-    # Get categories
-    categories = await category_client.get_categories(user_id)
-
-    # Get all tasks to count per category
-    all_tasks = await task_client.get_tasks(user_id)
-
-    # Count tasks per category
-    task_counts = {}
-    for task in all_tasks:
-        category_info = task.get("category")
-        if category_info and isinstance(category_info, dict):
-            category_id = category_info.get("category_id")
-            if category_id:
-                task_counts[category_id] = task_counts.get(category_id, 0) + 1
-
-    # Format for UI
-    formatted_response = format_categories_for_ui(categories, task_counts)
-
-    return formatted_response
+    return {"type": "category_list", "success": True}

@@ -64,8 +64,7 @@ class NoteClient(BaseClient):
             "title": title,
             "color": color,
             "position_x": position_x,
-            "position_y": position_y,
-            "message": "✅ Nota creata con successo"
+            "position_y": position_y
         }
 
     async def update_note(
