@@ -16,152 +16,234 @@
 ## 📋 Key Features
 
 ### 🔐 Enterprise-Grade Authentication
-- **OAuth 2.1 JWT** - Secure token-based authentication following MCP 2025 standards (RFC 8707)
-- **Multi-User Support** - Single deployment serves all users via JWT token validation
-- **Audience Claim Validation** - Prevents token reuse across services
+- **OAuth 2.1 JWT** - Token-based authentication following MCP 2025 standards (RFC 8707)
+- **SSE Transport** - Server-Sent Events for HTTP-based deployment (Railway-ready)
+- **Context-Based Auth** - Token extracted automatically from SSE request headers
 
 ### 🚀 High-Performance Integration
 - **HTTP API Gateway** - Communicates with FastAPI backend, no direct database access
 - **Stateless Architecture** - No session management, fully scalable
-- **Connection Pooling** - Optimized HTTP client for high throughput
+- **Connection Pooling** - Optimized async HTTP client (httpx)
 
 ### 📱 Mobile-First Design
-- **React Native Optimized** - Returns data formatted for native mobile components
-- **Voice-Friendly Responses** - Includes voice summaries for TTS in chat applications
-- **Pre-formatted UI Data** - Emojis, colors, and formatted dates ready for display
+- **React Native Optimized** - `show_*` tools return data formatted for native mobile components
+- **Voice-Friendly Responses** - Includes `voice_summary` for TTS in chat applications
+- **Dual-Mode Tools** - `get_*` for internal data processing, `show_*` to trigger UI updates
 
 ---
 
-## 🛠️ Available MCP Tools (20 Total)
+## 🛠️ Available MCP Tools (18 Active)
 
-The MCP server provides **20 tools** organized into 5 categories for comprehensive task management.
+The MCP server provides **18 active tools** organized into 3 categories. All tools require JWT authentication via SSE Authorization header.
+
+> Tools follow a dual pattern: `get_*` returns raw data for model reasoning, `show_*` triggers UI rendering in the mobile app.
 
 ### 📋 Task Tools (8)
 
-| Tool | Description | Auth Required |
-|------|-------------|---------------|
-| `get_tasks` | Get tasks with filters (formatted for React Native) | ✅ Yes |
-| `add_task` | Create new task with smart category handling | ✅ Yes |
-| `update_task` | Update task fields | ✅ Yes |
-| `complete_task` | Quick shortcut to mark task as completed | ✅ Yes |
-| `get_task_stats` | Get statistics (total, completed, by priority) | ✅ Yes |
-| `get_next_due_task` | Get N upcoming tasks | ✅ Yes |
-| `get_overdue_tasks` | Get all overdue tasks | ✅ Yes |
-| `get_upcoming_tasks` | Get tasks due in next N days | ✅ Yes |
+| Tool | Description |
+|------|-------------|
+| `get_tasks` | Get tasks with filters — for internal model use (raw data) |
+| `add_task` | Create a new task with smart category lookup |
+| `update_task` | Update one or more fields of an existing task |
+| `complete_task` | Quick shortcut to mark a task as completed |
+| `get_task_stats` | Get aggregate statistics by status, priority, and category |
+| `get_overdue_tasks` | Get all overdue pending tasks |
+| `get_upcoming_tasks` | Get tasks due in the next N days |
+| `show_tasks_to_user` | Display task list in the mobile app UI |
 
-**Example Response - `get_tasks`:**
+**Example Response — `get_tasks`:**
+```json
+{
+  "tasks": [
+    {
+      "task_id": 123,
+      "title": "Pizza",
+      "description": "Ordinare pizza margherita",
+      "end_time": "2025-12-15T18:00:00",
+      "start_time": null,
+      "priority": "Alta",
+      "status": "In sospeso",
+      "category_id": 5,
+      "duration_minutes": 30
+    }
+  ],
+  "total": 10
+}
+```
+
+**Example Response — `add_task` (success):**
+```json
+{
+  "success": true,
+  "task_id": 124,
+  "category_used": "Cibo"
+}
+```
+
+**Example Response — `add_task` (category not found):**
+```json
+{
+  "success": false,
+  "message": "Categoria 'Cibo' non trovata.",
+  "category_suggestions": ["Alimentari", "Cucina"],
+  "action_required": "ask_user_to_create_category"
+}
+```
+
+**Example Response — `get_task_stats`:**
+```json
+{
+  "success": true,
+  "by_status": {
+    "In sospeso": 5,
+    "Completato": 3,
+    "Annullato": 1
+  },
+  "by_priority": {
+    "Alta": 2,
+    "Media": 4,
+    "Bassa": 3
+  },
+  "by_category": { "5": 4, "3": 2 },
+  "total": 9
+}
+```
+
+**Example Response — `get_overdue_tasks`:**
+```json
+{
+  "tasks": [
+    {
+      "task_id": 10,
+      "title": "Consegnare report",
+      "priority": "Alta",
+      "status": "In sospeso",
+      "end_time": "2025-12-01T09:00:00",
+      "days_overdue": 14
+    }
+  ],
+  "total": 1
+}
+```
+
+**Example Response — `show_tasks_to_user`:**
 ```json
 {
   "type": "task_list",
-  "tasks": [
-    {
-      "id": 123,
-      "title": "Pizza",
-      "endTimeFormatted": "Venerdì 15 dicembre, 18:00",
-      "category": "Cibo",
-      "categoryColor": "#EF4444",
-      "priority": "Alta",
-      "priorityEmoji": "⚡",
-      "status": "Pending",
-      "actions": {
-        "canEdit": true,
-        "canDelete": true,
-        "canComplete": true
-      }
-    }
-  ],
-  "summary": {
-    "total": 10,
-    "pending": 5,
-    "completed": 3,
-    "high_priority": 2
-  },
-  "voice_summary": "Hai 10 task, di cui 2 ad alta priorità. 5 sono in sospeso e 3 completati."
+  "success": true,
+  "filters_applied": {
+    "priority": "Alta",
+    "status": "In sospeso"
+  }
 }
 ```
 
 ---
 
-### 📂 Category Tools (4)
+### 📂 Category Tools (5)
 
-| Tool | Description | Auth Required |
-|------|-------------|---------------|
-| `get_my_categories` | Get all user categories | ✅ Yes |
-| `create_category` | Create new category | ✅ Yes |
-| `update_category` | Update category by ID | ✅ Yes |
-| `search_categories` | Search categories with fuzzy matching | ✅ Yes |
+| Tool | Description |
+|------|-------------|
+| `get_my_categories` | Get all user categories — for internal model use (raw data) |
+| `create_category` | Create a new category |
+| `update_category` | Update name or description of an existing category |
+| `show_categories_to_user` | Display category list in the mobile app UI |
+| `show_category_details` | Display details of a single category in the mobile app UI |
 
-**Example Response - `get_my_categories`:**
+**Example Response — `get_my_categories`:**
 ```json
 {
   "categories": [
     {
       "category_id": 1,
       "name": "Lavoro",
-      "description": "Task di lavoro",
-      "is_shared": true,
-      "owner_id": 1,
-      "permission_level": "READ_WRITE"
+      "description": "Task di lavoro"
+    },
+    {
+      "category_id": 2,
+      "name": "Casa",
+      "description": "Faccende domestiche"
     }
   ],
-  "total": 5,
-  "owned": 3,
-  "shared_with_me": 2
+  "total": 2
 }
 ```
 
----
-
-### 📝 Note Tools (4)
-
-| Tool | Description | Auth Required |
-|------|-------------|---------------|
-| `get_notes` | Get all user notes | ✅ Yes |
-| `create_note` | Create new note (post-it style) | ✅ Yes |
-| `update_note` | Update note text/position/color | ✅ Yes |
-| `delete_note` | Delete a note | ✅ Yes |
-
-**Example Response - `create_note`:**
+**Example Response — `create_category`:**
 ```json
 {
-  "note_id": 456,
-  "title": "Comprare il latte",
-  "color": "#FFEB3B",
-  "position_x": 100.5,
-  "position_y": 250.0,
-  "created_at": "2025-01-15T10:30:00Z",
-  "message": "✅ Nota creata con successo"
+  "success": true,
+  "type": "category_created",
+  "category_id": 3
 }
 ```
 
----
-
-### 🔧 Meta Tools (3)
-
-| Tool | Description | Auth Required |
-|------|-------------|---------------|
-| `get_or_create_category` | Smart category finder/creator with fuzzy matching | ✅ Yes |
-| `move_all_tasks_between_categories` | Bulk move tasks between categories | ✅ Yes |
-| `add_multiple_tasks` | Bulk create multiple tasks at once | ✅ Yes |
-
----
-
-### ⚕️ System Tools (1)
-
-| Tool | Description | Auth Required |
-|------|-------------|---------------|
-| `health_check` | Check server health and connectivity | ❌ No |
-
-**Example Response - `health_check`:**
+**Example Response — `show_categories_to_user`:**
 ```json
 {
-  "mcp_server": "healthy",
-  "fastapi_server": "healthy",
-  "fastapi_url": "http://localhost:8080",
-  "timestamp": "2025-01-15T10:30:00Z",
-  "version": "2.0.0"
+  "type": "category_list",
+  "success": true
 }
 ```
+
+---
+
+### 📝 Note Tools (5)
+
+| Tool | Description |
+|------|-------------|
+| `get_notes` | Get all user notes — for internal model use (raw data) |
+| `create_note` | Create a new post-it style note |
+| `update_note` | Update text, position, or color of a note |
+| `delete_note` | Delete a note (irreversible) |
+| `show_notes_to_user` | Display note board in the mobile app UI |
+
+**Available note colors:** `#FFEB3B` (yellow), `#FF9800` (orange), `#4CAF50` (green), `#2196F3` (blue), `#E91E63` (pink), `#9C27B0` (purple)
+
+**Example Response — `get_notes`:**
+```json
+{
+  "notes": [
+    {
+      "note_id": 456,
+      "title": "Comprare il latte",
+      "color": "#FFEB3B",
+      "position_x": "100",
+      "position_y": "250",
+      "created_at": "2025-01-15T10:30:00Z"
+    }
+  ],
+  "total": 3
+}
+```
+
+**Example Response — `create_note`:**
+```json
+{
+  "success": true,
+  "type": "note_created",
+  "note_id": 456
+}
+```
+
+**Example Response — `show_notes_to_user`:**
+```json
+{
+  "type": "note_list",
+  "success": true
+}
+```
+
+---
+
+### ⚕️ Inactive Tools (2 — commented out)
+
+| Tool | Description |
+|------|-------------|
+| `add_multiple_tasks` | Bulk create multiple tasks at once |
+| `health_check` | Check server health and connectivity (no auth required) |
+
+These tools are defined in `src/tools/` but not registered. Uncomment in `src/core/server.py` to enable.
 
 ---
 
@@ -196,7 +278,6 @@ Run your own local MCP server instance.
 - **Python 3.11+** (virtual environment recommended)
 - **MyTaskly FastAPI Server** running locally (see [MyTaskly-server](https://github.com/Gabry848/MyTaskly-server))
 - **JWT Secret Key** matching your FastAPI server configuration
-- **Modified MyTaskly App** configured to use your custom server
 
 **Quick Start (5 minutes):**
 
@@ -206,10 +287,6 @@ cd MyTaskly-mcp
 python -m venv venv && pip install -r requirements.txt
 cp .env.example .env && python main.py
 ```
-
-⚠️ **Important:** When self-hosting, you must also:
-1. Run a local instance of [MyTaskly-server](https://github.com/Gabry848/MyTaskly-server)
-2. Modify the MyTaskly mobile app to point to your custom server URLs
 
 ---
 
@@ -248,12 +325,16 @@ FASTAPI_API_KEY=your_api_key_here
 # CRITICAL: Must match FastAPI server configuration!
 JWT_SECRET_KEY=your_jwt_secret_key_here
 JWT_ALGORITHM=HS256
-MCP_AUDIENCE=mytaskly-mcp
+MCP_AUDIENCE=mcp://mytaskly-mcp-server
 
 # ============ SERVER CONFIGURATION ============
-MCP_SERVER_NAME=MyTaskly-MCP
-MCP_SERVER_VERSION=2.0.0
+MCP_SERVER_NAME=MyTaskly MCP Server
+MCP_SERVER_VERSION=0.1.1
 LOG_LEVEL=INFO
+
+# ============ DEPLOYMENT ============
+HOST=0.0.0.0
+PORT=8000
 ```
 
 ⚠️ **CRITICAL:** `JWT_SECRET_KEY` MUST match your FastAPI server's `SECRET_KEY` environment variable!
@@ -264,7 +345,7 @@ LOG_LEVEL=INFO
 python main.py
 ```
 
-The server will start in **stdio mode** and display the available tools. Configure your MCP client to connect to this server.
+The server starts in **SSE (Server-Sent Events) mode** on `http://0.0.0.0:8000`. Configure your MCP client to connect to this URL.
 
 ---
 
@@ -272,7 +353,7 @@ The server will start in **stdio mode** and display the available tools. Configu
 
 ### OAuth 2.1 Flow
 
-The MCP server uses JWT tokens following OAuth 2.1 and RFC 8707 standards:
+The MCP server uses JWT tokens following OAuth 2.1 and RFC 8707 standards. The token is extracted automatically from the SSE `Authorization` header — tools receive a `ctx: Context` parameter, not an explicit `authorization` string.
 
 ```
 ┌─────────────────┐
@@ -290,12 +371,12 @@ The MCP server uses JWT tokens following OAuth 2.1 and RFC 8707 standards:
 ┌─────────────────┐
 │  Mobile Client  │  5. Stores token securely
 └────────┬────────┘
-         │ 6. Calls MCP tools with Authorization header
+         │ 6. Calls MCP tools via SSE with Authorization header
          ▼
 ┌─────────────────┐
-│   MCP Server    │  7. Validates JWT signature
-│ (This project)  │  8. Verifies audience claim
-│                 │  9. Extracts user_id from token
+│   MCP Server    │  7. Extracts token from SSE context
+│ (This project)  │  8. Validates JWT signature + audience
+│                 │  9. Extracts user_id from "sub" claim
 └────────┬────────┘
          │ 10. Makes HTTP request to FastAPI with user_id
          ▼
@@ -334,7 +415,7 @@ The JWT must include these claims (following RFC 7519 and RFC 8707):
 | Feature | Implementation |
 |---------|----------------|
 | **Signature Validation** | HS256 with shared secret |
-| **Audience Claim** | Prevents token reuse across services |
+| **Audience Claim** | Prevents token reuse across services (RFC 8707) |
 | **Expiration Check** | Automatic token invalidation |
 | **User Isolation** | Each request scoped to authenticated user |
 
@@ -342,11 +423,9 @@ The JWT must include these claims (following RFC 7519 and RFC 8707):
 
 **Option 1: From FastAPI (Production)**
 
-You need to add this endpoint to your FastAPI server:
+Add this endpoint to your FastAPI server:
 
 ```python
-# src/app/api/routes/auth.py
-
 @router.post("/auth/mcp-token")
 async def get_mcp_token(current_user: User = Depends(get_current_user)):
     """Generate JWT token for MCP server access."""
@@ -372,90 +451,32 @@ token = create_test_token(user_id=1, expires_minutes=30)
 print(f"Test Token: {token}")
 ```
 
+---
+
 ## 🧪 Testing & Development
 
-### Manual Testing with Python
-
-```python
-import asyncio
-from src.auth import create_test_token
-from src.server import get_tasks, get_categories, create_note
-
-async def test_mcp_tools():
-    """Test all MCP tools with a generated token."""
-
-    # Generate test token for user_id=1 (expires in 30 minutes)
-    token = create_test_token(user_id=1, expires_minutes=30)
-    auth_header = f"Bearer {token}"
-
-    print("🔑 Generated test token for user_id=1\n")
-
-    # Test 1: Get Tasks
-    print("1️⃣ Testing get_tasks...")
-    tasks = await get_tasks(authorization=auth_header)
-    print(f"   ✅ Retrieved {tasks['summary']['total']} tasks")
-    print(f"   📊 Summary: {tasks['summary']}")
-    print(f"   🎤 Voice: {tasks['voice_summary']}\n")
-
-    # Test 2: Get Categories
-    print("2️⃣ Testing get_categories...")
-    categories = await get_categories(authorization=auth_header)
-    print(f"   ✅ Retrieved {categories['total']} categories")
-    print(f"   📂 Owned: {categories.get('owned', 0)}")
-    print(f"   🤝 Shared: {categories.get('shared_with_me', 0)}\n")
-
-    # Test 3: Create Note
-    print("3️⃣ Testing create_note...")
-    note = await create_note(
-        authorization=auth_header,
-        title="Test note from MCP",
-        color="#4CAF50",
-        position_x=100.0,
-        position_y=200.0
-    )
-    print(f"   ✅ Created note #{note['note_id']}")
-    print(f"   📝 Title: {note['title']}")
-    print(f"   🎨 Color: {note['color']}\n")
-
-    print("✅ All tests completed successfully!")
-
-# Run tests
-if __name__ == "__main__":
-    asyncio.run(test_mcp_tools())
-```
-
-### Testing with cURL
+### Generate Test Token
 
 ```bash
-# 1. Generate a test JWT token
 python -c "from src.auth import create_test_token; print(create_test_token(1))"
+```
 
-# 2. Export token to environment variable (replace with actual token)
-export MCP_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+### Manual Testing with cURL
 
-# 3. Test get_tasks
+```bash
+# Export token to environment variable
+export MCP_TOKEN="your_token_here"
+
+# Test get_tasks (SSE endpoint)
 curl -X POST http://localhost:8000/mcp/get_tasks \
   -H "Authorization: Bearer $MCP_TOKEN" \
   -H "Content-Type: application/json"
 
-# 4. Test get_categories
-curl -X POST http://localhost:8000/mcp/get_categories \
-  -H "Authorization: Bearer $MCP_TOKEN" \
-  -H "Content-Type: application/json"
-
-# 5. Test create_note
-curl -X POST http://localhost:8000/mcp/create_note \
+# Test add_task
+curl -X POST http://localhost:8000/mcp/add_task \
   -H "Authorization: Bearer $MCP_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "title": "Meeting notes",
-    "color": "#FF5722",
-    "position_x": 150.5,
-    "position_y": 300.0
-  }'
-
-# 6. Test health_check (no auth required)
-curl -X GET http://localhost:8000/mcp/health_check
+  -d '{"title": "Comprare latte", "category_name": "Casa", "priority": "Bassa"}'
 ```
 
 ### Automated Test Suite
@@ -469,81 +490,9 @@ python -m pytest tests/test_auth.py -v
 
 # Run with coverage report
 python -m pytest tests/ --cov=src --cov-report=html
-
-# Run with output
-python -m pytest tests/ -v -s
 ```
 
 ---
-
-## 📱 Integration with React Native
-
-The `get_tasks` tool returns data optimized for React Native components:
-
-```tsx
-import { FlatList, View, Text } from 'react-native';
-
-async function fetchTasks() {
-  // Get JWT token from your auth system
-  const token = await getAuthToken();
-
-  // Call MCP server
-  const response = await mcpClient.call('get_tasks', {
-    authorization: `Bearer ${token}`
-  });
-
-  return response;
-}
-
-function TasksList() {
-  const [data, setData] = useState(null);
-
-  useEffect(() => {
-    fetchTasks().then(setData);
-  }, []);
-
-  if (!data) return <Loading />;
-
-  return (
-    <View>
-      {/* Voice summary for accessibility */}
-      <Text accessible>{data.voice_summary}</Text>
-
-      {/* Render tasks list */}
-      <FlatList
-        data={data.tasks}
-        renderItem={({ item }) => (
-          <TaskCard
-            title={item.title}
-            date={item.endTimeFormatted}
-            category={item.category}
-            categoryColor={item.categoryColor}
-            priority={item.priorityEmoji}
-          />
-        )}
-      />
-    </View>
-  );
-}
-```
-
-## 🎤 Integration with Voice Chat
-
-The response includes `voice_summary` for TTS:
-
-```python
-# In your chatbot service
-response = await mcp_client.call('get_tasks', {
-    'authorization': f'Bearer {user_jwt}'
-})
-
-# For visual display
-ui_data = response['tasks']
-
-# For voice output
-tts_text = response['voice_summary']
-# "Hai 10 task, di cui 2 ad alta priorità. 5 sono in sospeso e 3 completati."
-```
 
 ## 🔒 Security Best Practices
 
@@ -553,6 +502,8 @@ tts_text = response['voice_summary']
 4. **Implement token refresh** in your client
 5. **Validate audience claim** (RFC 8707) - prevents token reuse
 6. **Log authentication failures** for monitoring
+
+---
 
 ## 🏗️ Architecture & Project Structure
 
@@ -566,7 +517,7 @@ tts_text = response['voice_summary']
 │   ┌─────────────────┐                                       │
 │   │  Mobile Client  │  1. User authentication               │
 │   │ (React Native)  │  2. Receives JWT token                │
-│   └────────┬────────┘  3. Calls MCP tools                   │
+│   └────────┬────────┘  3. Calls MCP tools via SSE          │
 │            │                                                  │
 │            ▼                                                  │
 │   ┌─────────────────┐                                       │
@@ -596,34 +547,34 @@ MyTaskly-mcp/
 ├── src/
 │   ├── core/                      # Core MCP server
 │   │   ├── __init__.py
-│   │   └── server.py             # FastMCP instance & tool registration
+│   │   └── server.py             # FastMCP instance, log_tool decorator & tool registration
 │   │
 │   ├── client/                    # HTTP client layer
 │   │   ├── __init__.py
-│   │   ├── base.py               # Base HTTP client with auth
-│   │   ├── categories.py         # Category API endpoints
-│   │   ├── tasks.py              # Task API endpoints
-│   │   ├── notes.py              # Note API endpoints
-│   │   └── health.py             # Health check endpoint
+│   │   ├── base.py               # BaseClient with async HTTP methods + JWT token generation
+│   │   ├── categories.py         # CategoryClient
+│   │   ├── tasks.py              # TaskClient (with status/priority normalization)
+│   │   ├── notes.py              # NoteClient
+│   │   └── health.py             # HealthClient
 │   │
-│   ├── tools/                     # MCP tools (business logic)
+│   ├── tools/                     # MCP tool definitions
 │   │   ├── __init__.py
-│   │   ├── categories.py         # Category tools (4 methods)
-│   │   ├── tasks.py              # Task tools (8 methods)
-│   │   ├── notes.py              # Note tools (4 methods)
-│   │   ├── meta.py               # Meta tools (3 methods)
-│   │   └── health.py             # Health check tool (1 method)
+│   │   ├── categories.py         # 5 category tools
+│   │   ├── tasks.py              # 8 task tools
+│   │   ├── notes.py              # 5 note tools
+│   │   ├── meta.py               # add_multiple_tasks (inactive)
+│   │   └── health.py             # health_check (inactive)
 │   │
-│   ├── formatters/                # Response formatters
+│   ├── formatters/                # Response formatters for React Native
 │   │   ├── __init__.py
-│   │   └── tasks.py              # Task formatting for React Native UI
+│   │   └── tasks.py              # format_tasks_for_ui, format_categories_for_ui, format_notes_for_ui
 │   │
-│   ├── auth.py                    # JWT authentication
-│   ├── config.py                  # Configuration settings
-│   └── http_server.py            # Optional HTTP server wrapper
+│   ├── auth.py                    # JWT authentication (extract, verify, create_test_token)
+│   ├── config.py                  # Pydantic settings (loaded from .env)
+│   └── http_server.py            # HTTP server wrapper
 │
 ├── tests/                         # Test suite
-├── main.py                        # Main entry point
+├── main.py                        # Entry point — runs FastMCP in SSE mode
 ├── pyproject.toml                 # Project configuration
 ├── requirements.txt               # Python dependencies
 ├── ARCHITECTURE.md                # Detailed architecture documentation
@@ -634,19 +585,19 @@ MyTaskly-mcp/
 
 | Layer | Files | Responsibility |
 |-------|-------|----------------|
-| **Core Layer** | `src/core/` | MCP server instance and tool registration |
-| **Tools Layer** | `src/tools/` | MCP tool definitions with business logic (20 tools) |
-| **Client Layer** | `src/client/` | HTTP communication with FastAPI server |
-| **Formatters Layer** | `src/formatters/` | Transform API responses for React Native UI |
+| **Core Layer** | `src/core/` | FastMCP instance, `log_tool` decorator, tool registration |
+| **Tools Layer** | `src/tools/` | MCP tool definitions — auth, business logic, response shaping |
+| **Client Layer** | `src/client/` | Async HTTP communication with FastAPI backend |
+| **Formatters Layer** | `src/formatters/` | Transform API responses into React Native-ready structures |
 
 ### Key Components
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **MCP Server** | FastMCP with asyncio | Request handling & tool orchestration |
-| **JWT Authentication** | PyJWT with HS256 | Secure token-based authentication |
+| **MCP Server** | FastMCP + SSE | Request handling, tool orchestration, Railway deployment |
+| **JWT Authentication** | PyJWT (HS256) | Token validation via SSE context headers |
 | **HTTP Client** | httpx (async) | FastAPI backend communication |
-| **Data Formatting** | Custom formatters | Mobile-optimized response structure |
+| **Data Formatters** | Custom formatters | Mobile-optimized response structure with voice summaries |
 
 📚 **For detailed architecture information**, see [ARCHITECTURE.md](ARCHITECTURE.md)
 
@@ -672,9 +623,12 @@ async def new_operation(self, user_id: int, params...) -> Dict[str, Any]:
 
 ```python
 # src/tools/tasks.py
-async def new_tool(authorization: str, params...) -> Dict[str, Any]:
+from fastmcp import Context
+from src.auth import authenticate_from_context
+
+async def new_tool(ctx: Context, params...) -> Dict[str, Any]:
     """Tool documentation here."""
-    user_id = verify_jwt_token(authorization)
+    user_id = await authenticate_from_context(ctx)
     result = await task_client.new_operation(user_id, params)
     return format_response(result)
 ```
@@ -684,12 +638,8 @@ async def new_tool(authorization: str, params...) -> Dict[str, Any]:
 ```python
 # src/core/server.py
 from src.tools.tasks import new_tool
-mcp.tool()(new_tool)
+mcp.tool()(log_tool(new_tool))
 ```
-
-#### 4. Update main.py Banner
-
-Add the new tool to the list in `print_banner()`.
 
 **For more details**, see [ARCHITECTURE.md](ARCHITECTURE.md#adding-new-tools)
 
@@ -789,8 +739,8 @@ The MIT License allows you to:
 
 ## 📞 Support & Feedback
 
-- **Issues**: [GitHub Issues](https://github.com/YOUR_USERNAME/MyTaskly-mcp/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/YOUR_USERNAME/MyTaskly-mcp/discussions)
+- **Issues**: [GitHub Issues](https://github.com/Gabry848/MyTaskly-mcp/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Gabry848/MyTaskly-mcp/discussions)
 - **Email**: support@mytasklyapp.com
 
 ---
