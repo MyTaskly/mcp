@@ -143,6 +143,7 @@ mcp.tool()(log_tool(show_notes_to_user))
 # OAuth 2.1 routes (Claude.ai / Claude Code support)
 # ---------------------------------------------------------------------------
 from src.oauth import (
+    jwks_endpoint,
     protected_resource_metadata,
     authorization_server_metadata,
     dynamic_client_registration,
@@ -151,6 +152,7 @@ from src.oauth import (
     token_endpoint,
 )
 
+mcp.custom_route("/.well-known/jwks.json",               methods=["GET"])(jwks_endpoint)
 mcp.custom_route("/.well-known/oauth-protected-resource",  methods=["GET"])(protected_resource_metadata)
 mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])(authorization_server_metadata)
 mcp.custom_route("/oauth/register",  methods=["POST"])(dynamic_client_registration)
