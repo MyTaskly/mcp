@@ -85,11 +85,14 @@ def _issue_mcp_jwt(user_id: int, expires_minutes: int = 60) -> str:
 
 async def _authenticate_user(username: str, password: str) -> Optional[int]:
     """
-    Authenticate against the FastAPI backend (POST /auth/login).
+    Authenticate against the FastAPI backend.
+    Step 1: POST /auth/login  → bearer_token (sub = username string)
+    Step 2: GET  /auth/me     → {"id": "<user_id>", ...}  (integer user_id)
     Returns user_id on success, None on failure.
     """
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
+            # Step 1 — login
             resp = await client.post(
                 f"{settings.fastapi_base_url}/auth/login",
                 headers={
@@ -102,24 +105,27 @@ async def _authenticate_user(username: str, password: str) -> Optional[int]:
                 logger.warning("FastAPI login returned %d for user %r", resp.status_code, username)
                 return None
 
-            data = resp.json()
-            bearer_token = data.get("bearer_token")
+            bearer_token = resp.json().get("bearer_token")
             if not bearer_token:
                 logger.error("FastAPI login response missing bearer_token")
                 return None
 
-            # Decode without signature verification — the token was received directly
-            # from our own FastAPI backend over HTTPS, so we can trust its content.
-            # We only need the user_id (sub); we do not need to re-validate the signature.
-            payload = jwt.decode(
-                bearer_token,
-                options={"verify_signature": False},
-                algorithms=[settings.jwt_algorithm],
+            # Step 2 — resolve integer user_id via /auth/me
+            me_resp = await client.get(
+                f"{settings.fastapi_base_url}/auth/me",
+                headers={
+                    "X-API-Key": settings.fastapi_api_key,
+                    "Authorization": f"Bearer {bearer_token}",
+                },
             )
-            sub = payload.get("sub")
-            return int(sub) if sub else None
+            if me_resp.status_code != 200:
+                logger.error("GET /auth/me returned %d", me_resp.status_code)
+                return None
 
-        except (httpx.HTTPError, jwt.PyJWTError, ValueError, TypeError) as exc:
+            user_id_str = me_resp.json().get("id")
+            return int(user_id_str) if user_id_str else None
+
+        except (httpx.HTTPError, ValueError, TypeError) as exc:
             logger.error("Authentication error: %s", exc)
             return None
 
