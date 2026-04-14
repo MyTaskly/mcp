@@ -102,12 +102,16 @@ def verify_jwt_token(authorization: Optional[str] = Header(None)) -> int:
 
     try:
         # Decode and validate JWT.
-        # Accept both audiences:
+        # Accept multiple audiences:
         #   - mcp_audience: legacy value used by the mobile app
-        #   - mcp_server_url: public URL used by OAuth-issued tokens (Claude / Claude Code)
+        #   - mcp_server_url with and without trailing slash:
+        #     Claude passes resource=https://mcp.mytasklyapp.com/ (with slash)
+        #     so we normalise to accept both variants.
+        base_url = settings.mcp_server_url.rstrip("/")
         valid_audiences = [
             settings.mcp_audience,
-            settings.mcp_server_url.rstrip("/"),
+            base_url,
+            base_url + "/",
         ]
         payload = jwt.decode(
             token,
