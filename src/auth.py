@@ -9,6 +9,15 @@ from fastmcp import Context
 from fastmcp.server.dependencies import get_http_request
 from src.config import settings
 
+
+def _www_authenticate_header() -> str:
+    """Build WWW-Authenticate header with OAuth discovery URL for RFC 9728."""
+    base = settings.mcp_server_url.rstrip("/")
+    return (
+        f'Bearer realm="mcp", '
+        f'resource_metadata="{base}/.well-known/oauth-protected-resource"'
+    )
+
 logger = logging.getLogger(__name__)
 
 
@@ -44,7 +53,7 @@ def extract_token_from_context(ctx: Context) -> str:
             raise HTTPException(
                 status_code=401,
                 detail="Missing Authorization header in SSE connection",
-                headers={"WWW-Authenticate": 'Bearer realm="MCP"'}
+                headers={"WWW-Authenticate": _www_authenticate_header()}
             )
 
         return authorization
@@ -54,7 +63,7 @@ def extract_token_from_context(ctx: Context) -> str:
         raise HTTPException(
             status_code=401,
             detail=f"Cannot extract Authorization header from context: {str(e)}",
-            headers={"WWW-Authenticate": 'Bearer realm="MCP"'}
+            headers={"WWW-Authenticate": _www_authenticate_header()}
         )
 
 
@@ -79,14 +88,14 @@ def verify_jwt_token(authorization: Optional[str] = Header(None)) -> int:
         raise HTTPException(
             status_code=401,
             detail="Missing Authorization header",
-            headers={"WWW-Authenticate": 'Bearer realm="MCP"'}
+            headers={"WWW-Authenticate": _www_authenticate_header()}
         )
 
     if not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=401,
             detail="Invalid Authorization header format. Expected: Bearer <token>",
-            headers={"WWW-Authenticate": 'Bearer realm="MCP"'}
+            headers={"WWW-Authenticate": _www_authenticate_header()}
         )
 
     token = authorization.replace("Bearer ", "").strip()
@@ -131,35 +140,35 @@ def verify_jwt_token(authorization: Optional[str] = Header(None)) -> int:
         raise HTTPException(
             status_code=401,
             detail="Token has expired",
-            headers={"WWW-Authenticate": 'Bearer error="invalid_token", error_description="Token expired"'}
+            headers={"WWW-Authenticate": _www_authenticate_header() + ', error="invalid_token", error_description="Token expired"'}
         )
 
     except jwt.InvalidAudienceError:
         raise HTTPException(
             status_code=401,
             detail=f"Invalid token audience. Expected: {settings.mcp_audience}",
-            headers={"WWW-Authenticate": 'Bearer error="invalid_token", error_description="Invalid audience"'}
+            headers={"WWW-Authenticate": _www_authenticate_header() + ', error="invalid_token", error_description="Invalid audience"'}
         )
 
     except jwt.InvalidSignatureError:
         raise HTTPException(
             status_code=401,
             detail="Invalid token signature",
-            headers={"WWW-Authenticate": 'Bearer error="invalid_token", error_description="Invalid signature"'}
+            headers={"WWW-Authenticate": _www_authenticate_header() + ', error="invalid_token", error_description="Invalid signature"'}
         )
 
     except jwt.DecodeError as e:
         raise HTTPException(
             status_code=401,
             detail=f"Token decode error: {str(e)}",
-            headers={"WWW-Authenticate": 'Bearer error="invalid_token", error_description="Malformed token"'}
+            headers={"WWW-Authenticate": _www_authenticate_header() + ', error="invalid_token", error_description="Malformed token"'}
         )
 
     except AuthenticationError as e:
         raise HTTPException(
             status_code=401,
             detail=str(e),
-            headers={"WWW-Authenticate": 'Bearer error="invalid_token"'}
+            headers={"WWW-Authenticate": _www_authenticate_header() + ', error="invalid_token"'}
         )
 
     except Exception as e:
@@ -167,7 +176,7 @@ def verify_jwt_token(authorization: Optional[str] = Header(None)) -> int:
         raise HTTPException(
             status_code=401,
             detail="Authentication failed",
-            headers={"WWW-Authenticate": 'Bearer error="invalid_token"'}
+            headers={"WWW-Authenticate": _www_authenticate_header() + ', error="invalid_token"'}
         )
 
 

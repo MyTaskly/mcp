@@ -120,3 +120,22 @@ mcp.tool()(log_tool(show_notes_to_user))
 
 # Register health check (no auth required)
 # mcp.tool()(log_tool(health_check))
+
+# ---------------------------------------------------------------------------
+# OAuth 2.1 routes (Claude.ai / Claude Code support)
+# ---------------------------------------------------------------------------
+from src.oauth import (
+    protected_resource_metadata,
+    authorization_server_metadata,
+    dynamic_client_registration,
+    authorize_get,
+    authorize_post,
+    token_endpoint,
+)
+
+mcp.custom_route("/.well-known/oauth-protected-resource",  methods=["GET"])(protected_resource_metadata)
+mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])(authorization_server_metadata)
+mcp.custom_route("/oauth/register",  methods=["POST"])(dynamic_client_registration)
+mcp.custom_route("/oauth/authorize", methods=["GET"])(authorize_get)
+mcp.custom_route("/oauth/authorize", methods=["POST"])(authorize_post)
+mcp.custom_route("/oauth/token",     methods=["POST"])(token_endpoint)
