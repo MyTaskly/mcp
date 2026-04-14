@@ -69,18 +69,19 @@ def _verify_pkce(code_verifier: str, code_challenge: str, method: str = "S256") 
     return secrets.compare_digest(computed, code_challenge)
 
 
-def _issue_mcp_jwt(user_id: int, expires_minutes: int = 60) -> str:
+def _issue_mcp_jwt(user_id: int, audience: str = "", expires_minutes: int = 60) -> str:
     """
     Issue a JWT for the OAuth flow.
-    Audience is set to the public MCP server URL so that Claude (which passes
-    resource=<mcp_server_url> in the authorize request) accepts the token.
-    verify_jwt_token() is updated to accept this audience as well.
+    `audience` should be the exact resource URL Claude passed (RFC 8707),
+    including any trailing slash, so that Claude's client-side aud check passes.
+    `iss` matches the `issuer` in /.well-known/oauth-authorization-server.
     """
     now = datetime.now(timezone.utc)
+    aud = audience or settings.mcp_server_url
     payload = {
         "sub": str(user_id),
-        "aud": settings.mcp_server_url.rstrip("/"),
-        "iss": settings.mcp_server_url.rstrip("/"),  # must match `issuer` in /.well-known/oauth-authorization-server
+        "aud": aud,
+        "iss": settings.mcp_server_url.rstrip("/"),  # matches metadata issuer
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=expires_minutes)).timestamp()),
         "scope": "mcp:tools",
@@ -142,6 +143,7 @@ def _render_login(
     code_challenge: str,
     code_challenge_method: str,
     state: str,
+    resource: str = "",
     error: str = "",
 ) -> str:
     html = _load_login_html()
@@ -152,6 +154,7 @@ def _render_login(
         "{{code_challenge}}": code_challenge,
         "{{code_challenge_method}}": code_challenge_method,
         "{{state}}": state,
+        "{{resource}}": resource,
         "{{error}}": error,
         "{{error_display}}": "flex" if error else "none",
     }
@@ -264,6 +267,7 @@ async def authorize_get(request: Request) -> Response:
         code_challenge=code_challenge,
         code_challenge_method=p.get("code_challenge_method", "S256"),
         state=p.get("state", ""),
+        resource=p.get("resource", ""),
     )
     return HTMLResponse(html)
 
@@ -280,6 +284,7 @@ async def authorize_post(request: Request) -> Response:
     code_challenge = str(form.get("code_challenge", ""))
     code_challenge_method = str(form.get("code_challenge_method", "S256"))
     state = str(form.get("state", ""))
+    resource = str(form.get("resource", ""))
     username = str(form.get("username", "")).strip()
     password = str(form.get("password", ""))
 
@@ -300,6 +305,7 @@ async def authorize_post(request: Request) -> Response:
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
             state=state,
+            resource=resource,
             error="Credenziali non valide. Controlla username e password.",
         )
         return HTMLResponse(html, status_code=401)
@@ -313,6 +319,7 @@ async def authorize_post(request: Request) -> Response:
         "redirect_uri": redirect_uri,
         "code_challenge": code_challenge,
         "code_challenge_method": code_challenge_method,
+        "resource": resource,  # preserve exact resource URL Claude passed (RFC 8707)
         "expires_at": datetime.now(timezone.utc) + timedelta(minutes=10),
     }
 
@@ -383,7 +390,13 @@ async def token_endpoint(request: Request) -> Response:
     del _auth_codes[code]
 
     user_id = code_data["user_id"]
-    access_token = _issue_mcp_jwt(user_id, expires_minutes=60)
+
+    # Use the exact resource URL Claude passed (RFC 8707): preserves trailing slash
+    # so that Claude's client-side aud validation passes without normalization.
+    # Fall back to mcp_server_url if resource was not sent (e.g. older clients).
+    audience = code_data.get("resource") or settings.mcp_server_url
+    logger.info("Issuing token: user_id=%d aud=%r", user_id, audience)
+    access_token = _issue_mcp_jwt(user_id, audience=audience, expires_minutes=60)
 
     logger.info("Access token issued for user_id=%d via OAuth flow", user_id)
     return JSONResponse(
