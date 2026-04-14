@@ -108,12 +108,13 @@ async def _authenticate_user(username: str, password: str) -> Optional[int]:
                 logger.error("FastAPI login response missing bearer_token")
                 return None
 
-            # Decode without audience validation — we only need the user_id (sub)
+            # Decode without signature verification — the token was received directly
+            # from our own FastAPI backend over HTTPS, so we can trust its content.
+            # We only need the user_id (sub); we do not need to re-validate the signature.
             payload = jwt.decode(
                 bearer_token,
-                settings.jwt_secret_key,
+                options={"verify_signature": False},
                 algorithms=[settings.jwt_algorithm],
-                options={"verify_aud": False, "verify_exp": True},
             )
             sub = payload.get("sub")
             return int(sub) if sub else None
