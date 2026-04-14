@@ -101,22 +101,35 @@ def verify_jwt_token(authorization: Optional[str] = Header(None)) -> int:
     token = authorization.replace("Bearer ", "").strip()
 
     try:
-        # Decode and validate JWT.
-        # Accept multiple audiences:
-        #   - mcp_audience: legacy value used by the mobile app
-        #   - mcp_server_url with and without trailing slash:
-        #     Claude passes resource=https://mcp.mytasklyapp.com/ (with slash)
-        #     so we normalise to accept both variants.
+        # Accept multiple audiences (legacy mobile app + OAuth/Claude variants)
         base_url = settings.mcp_server_url.rstrip("/")
         valid_audiences = [
             settings.mcp_audience,
             base_url,
             base_url + "/",
         ]
+
+        # Detect algorithm from JWT header to choose the right key
+        try:
+            header = jwt.get_unverified_header(token)
+            alg = header.get("alg", settings.jwt_algorithm)
+        except jwt.DecodeError:
+            alg = settings.jwt_algorithm
+
+        if alg == "RS256":
+            # OAuth-issued token — verify with RSA public key
+            from src.oauth import get_rsa_public_pem
+            decode_key = get_rsa_public_pem()
+            algorithms = ["RS256"]
+        else:
+            # Legacy HS256 token from mobile app
+            decode_key = settings.jwt_secret_key
+            algorithms = [settings.jwt_algorithm]
+
         payload = jwt.decode(
             token,
-            settings.jwt_secret_key,
-            algorithms=[settings.jwt_algorithm],
+            decode_key,
+            algorithms=algorithms,
             audience=valid_audiences,
             options={
                 "verify_signature": True,

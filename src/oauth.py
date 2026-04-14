@@ -23,12 +23,59 @@ from typing import Optional
 
 import httpx
 import jwt
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import serialization
 from starlette.requests import Request
 from starlette.responses import JSONResponse, HTMLResponse, RedirectResponse, Response
 
 from src.config import settings
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# RSA key pair — generated once at startup (ephemeral; tokens expire in 1h
+# so server restarts are not a practical issue)
+# ---------------------------------------------------------------------------
+
+_rsa_private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+_rsa_public_key = _rsa_private_key.public_key()
+_rsa_key_id = secrets.token_urlsafe(8)
+
+_rsa_private_pem: bytes = _rsa_private_key.private_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PrivateFormat.PKCS8,
+    encryption_algorithm=serialization.NoEncryption(),
+)
+_rsa_public_pem: bytes = _rsa_public_key.public_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PublicFormat.SubjectPublicKeyInfo,
+)
+
+
+def _int_to_base64url(n: int) -> str:
+    byte_length = (n.bit_length() + 7) // 8
+    return base64.urlsafe_b64encode(n.to_bytes(byte_length, "big")).rstrip(b"=").decode()
+
+
+def get_jwks() -> dict:
+    """Return the JWKS document for the RSA public key."""
+    pub_numbers = _rsa_public_key.public_numbers()
+    return {
+        "keys": [
+            {
+                "kty": "RSA",
+                "use": "sig",
+                "kid": _rsa_key_id,
+                "alg": "RS256",
+                "n": _int_to_base64url(pub_numbers.n),
+                "e": _int_to_base64url(pub_numbers.e),
+            }
+        ]
+    }
+
+
+def get_rsa_public_pem() -> bytes:
+    return _rsa_public_pem
 
 # ---------------------------------------------------------------------------
 # In-memory stores (single-process; fine for Railway / single-dyno deploys)
@@ -71,22 +118,27 @@ def _verify_pkce(code_verifier: str, code_challenge: str, method: str = "S256") 
 
 def _issue_mcp_jwt(user_id: int, audience: str = "", expires_minutes: int = 60) -> str:
     """
-    Issue a JWT for the OAuth flow.
-    `audience` should be the exact resource URL Claude passed (RFC 8707),
-    including any trailing slash, so that Claude's client-side aud check passes.
-    `iss` matches the `issuer` in /.well-known/oauth-authorization-server.
+    Issue an RS256 JWT for the OAuth flow.
+    Signed with the ephemeral RSA private key; verifiable via GET /.well-known/jwks.json.
+    `audience` is the exact resource URL Claude passed (RFC 8707) — trailing slash included.
+    `iss` matches `issuer` in /.well-known/oauth-authorization-server.
     """
     now = datetime.now(timezone.utc)
     aud = audience or settings.mcp_server_url
     payload = {
         "sub": str(user_id),
         "aud": aud,
-        "iss": settings.mcp_server_url.rstrip("/"),  # matches metadata issuer
+        "iss": settings.mcp_server_url.rstrip("/"),
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=expires_minutes)).timestamp()),
         "scope": "mcp:tools",
     }
-    return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+    return jwt.encode(
+        payload,
+        _rsa_private_pem,
+        algorithm="RS256",
+        headers={"kid": _rsa_key_id},
+    )
 
 
 async def _authenticate_user(username: str, password: str) -> Optional[int]:
@@ -167,6 +219,11 @@ def _render_login(
 # Route handlers
 # ---------------------------------------------------------------------------
 
+async def jwks_endpoint(request: Request) -> Response:
+    """GET /.well-known/jwks.json — RSA public key for JWT verification"""
+    return JSONResponse(get_jwks(), headers={"Cache-Control": "no-store"})
+
+
 async def protected_resource_metadata(request: Request) -> Response:
     """GET /.well-known/oauth-protected-resource  (RFC 9728)"""
     base = settings.mcp_server_url.rstrip("/")
@@ -190,11 +247,13 @@ async def authorization_server_metadata(request: Request) -> Response:
             "authorization_endpoint": f"{base}/oauth/authorize",
             "token_endpoint": f"{base}/oauth/token",
             "registration_endpoint": f"{base}/oauth/register",
+            "jwks_uri": f"{base}/.well-known/jwks.json",
             "response_types_supported": ["code"],
             "grant_types_supported": ["authorization_code"],
             "code_challenge_methods_supported": ["S256"],
             "token_endpoint_auth_methods_supported": ["none"],
             "scopes_supported": ["mcp:tools"],
+            "id_token_signing_alg_values_supported": ["RS256"],
         },
         headers={"Cache-Control": "no-store"},
     )
