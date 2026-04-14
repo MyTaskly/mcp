@@ -101,12 +101,19 @@ def verify_jwt_token(authorization: Optional[str] = Header(None)) -> int:
     token = authorization.replace("Bearer ", "").strip()
 
     try:
-        # Decode and validate JWT
+        # Decode and validate JWT.
+        # Accept both audiences:
+        #   - mcp_audience: legacy value used by the mobile app
+        #   - mcp_server_url: public URL used by OAuth-issued tokens (Claude / Claude Code)
+        valid_audiences = [
+            settings.mcp_audience,
+            settings.mcp_server_url.rstrip("/"),
+        ]
         payload = jwt.decode(
             token,
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
-            audience=settings.mcp_audience,  # Resource Indicator validation (RFC 8707)
+            audience=valid_audiences,
             options={
                 "verify_signature": True,
                 "verify_exp": True,
