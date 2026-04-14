@@ -70,11 +70,16 @@ def _verify_pkce(code_verifier: str, code_challenge: str, method: str = "S256") 
 
 
 def _issue_mcp_jwt(user_id: int, expires_minutes: int = 60) -> str:
-    """Issue a JWT compatible with the existing verify_jwt_token() validator."""
+    """
+    Issue a JWT for the OAuth flow.
+    Audience is set to the public MCP server URL so that Claude (which passes
+    resource=<mcp_server_url> in the authorize request) accepts the token.
+    verify_jwt_token() is updated to accept this audience as well.
+    """
     now = datetime.now(timezone.utc)
     payload = {
         "sub": str(user_id),
-        "aud": settings.mcp_audience,
+        "aud": settings.mcp_server_url.rstrip("/"),
         "iss": settings.jwt_issuer,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=expires_minutes)).timestamp()),
