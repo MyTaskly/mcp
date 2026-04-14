@@ -4,9 +4,25 @@ import json
 import logging
 import functools
 from fastmcp import FastMCP
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 from src.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class AuthDebugMiddleware(BaseHTTPMiddleware):
+    """Log every request with its auth status to diagnose token issues."""
+
+    async def dispatch(self, request: Request, call_next):
+        auth = request.headers.get("Authorization", "")
+        if auth:
+            preview = auth[:30] + "..." if len(auth) > 30 else auth
+            logger.info("[AUTH] %s %s | Header: %s", request.method, request.url.path, preview)
+        response = await call_next(request)
+        if auth or response.status_code in (401, 403):
+            logger.info("[AUTH] %s %s → %d", request.method, request.url.path, response.status_code)
+        return response
 
 
 def _serialize(obj):
@@ -58,6 +74,8 @@ mcp = FastMCP(
         "Usa i tool 'show_*' per visualizzare dati nell'app mobile, e i tool 'get_*' per elaborazione interna."
     )
 )
+
+mcp.add_middleware(AuthDebugMiddleware)
 
 # Import and register all tools
 from src.tools.categories import (

@@ -80,7 +80,7 @@ def _issue_mcp_jwt(user_id: int, expires_minutes: int = 60) -> str:
     payload = {
         "sub": str(user_id),
         "aud": settings.mcp_server_url.rstrip("/"),
-        "iss": settings.jwt_issuer,
+        "iss": settings.mcp_server_url.rstrip("/"),  # must match `issuer` in /.well-known/oauth-authorization-server
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(minutes=expires_minutes)).timestamp()),
         "scope": "mcp:tools",
