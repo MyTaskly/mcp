@@ -132,10 +132,14 @@ def verify_jwt_token(authorization: Optional[str] = Header(None)) -> int:
         except (ValueError, TypeError):
             raise AuthenticationError(f"Invalid 'sub' claim format: {user_id_str}")
 
-        # Optional: Validate issuer if configured
+        # Validate issuer: accept both the legacy FastAPI issuer and the MCP
+        # server's own URL (used by OAuth-issued tokens).
         if "iss" in payload:
-            expected_issuer = "https://api.mytasklyapp.com"
-            if payload["iss"] != expected_issuer:
+            valid_issuers = {
+                settings.jwt_issuer,
+                settings.mcp_server_url.rstrip("/"),
+            }
+            if payload["iss"] not in valid_issuers:
                 raise AuthenticationError(f"Invalid issuer: {payload['iss']}")
 
         # Optional: Log successful authentication
