@@ -542,6 +542,25 @@ async def token_endpoint(request: Request) -> Response:
     logger.info("Issuing token: user_id=%d aud=%r", user_id, audience)
     access_token = _issue_mcp_jwt(user_id, audience=audience, expires_minutes=60)
 
+    # Debug: show JWT header/claims (without full token)
+    try:
+        header = jwt.get_unverified_header(access_token)
+        claims = jwt.decode(
+            access_token,
+            options={"verify_signature": False, "verify_exp": False, "verify_aud": False},
+        )
+        logger.info(
+            "OAuth token debug: kid=%r alg=%r iss=%r aud=%r sub=%r exp=%r",
+            header.get("kid"),
+            header.get("alg"),
+            claims.get("iss"),
+            claims.get("aud"),
+            claims.get("sub"),
+            claims.get("exp"),
+        )
+    except Exception as exc:
+        logger.warning("OAuth token debug decode failed: %s", exc)
+
     logger.info("Access token issued for user_id=%d via OAuth flow", user_id)
     return JSONResponse(
         {
@@ -549,6 +568,7 @@ async def token_endpoint(request: Request) -> Response:
             "token_type": "Bearer",
             "expires_in": 3600,
             "scope": "mcp:tools",
+            "resource": audience,
         },
         headers={"Cache-Control": "no-store", "Pragma": "no-cache", **_CORS_HEADERS},
     )

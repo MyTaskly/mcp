@@ -169,6 +169,31 @@ class AuthDebugMiddleware(BaseHTTPMiddleware):
                 proto or "(none)",
                 accept[:60] or "(none)",
             )
+            if auth.lower().startswith("bearer "):
+                token = auth.split(" ", 1)[1].strip()
+                try:
+                    import jwt as pyjwt
+
+                    hdr = pyjwt.get_unverified_header(token)
+                    payload = pyjwt.decode(
+                        token,
+                        options={
+                            "verify_signature": False,
+                            "verify_exp": False,
+                            "verify_aud": False,
+                        },
+                    )
+                    logger.info(
+                        "[REQ-AUTH] kid=%r alg=%r iss=%r aud=%r sub=%r exp=%r",
+                        hdr.get("kid"),
+                        hdr.get("alg"),
+                        payload.get("iss"),
+                        payload.get("aud"),
+                        payload.get("sub"),
+                        payload.get("exp"),
+                    )
+                except Exception as exc:
+                    logger.warning("[REQ-AUTH] cannot inspect bearer token: %s", exc)
 
         response = await call_next(request)
 
