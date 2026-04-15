@@ -4,12 +4,134 @@ import json
 import logging
 import functools
 from fastmcp import FastMCP
+from fastmcp.server.auth import TokenVerifier, AccessToken
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from pydantic import AnyHttpUrl
 from src.config import settings
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# JWT verifier: wraps our RS256 OAuth flow + legacy HS256 support
+# ---------------------------------------------------------------------------
+
+class MCPTokenVerifier(TokenVerifier):
+    """
+    FastMCP TokenVerifier that validates JWTs issued by our OAuth server.
+
+    Supports RS256 tokens (issued via OAuth 2.1 flow for Claude/Cursor)
+    and HS256 tokens (legacy mobile-app direct access).
+
+    Overrides _get_resource_url so the WWW-Authenticate header produced by
+    RequireAuthMiddleware points to /.well-known/oauth-protected-resource
+    (our custom route) rather than the path-scoped variant.
+    """
+
+    def _get_resource_url(self, path: str | None = None) -> AnyHttpUrl | None:
+        # Use just base_url — build_resource_metadata_url("https://host")
+        # produces "https://host/.well-known/oauth-protected-resource", which
+        # matches the custom route already registered on this server.
+        return self.base_url
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        """Validate a Bearer token and return AccessToken if valid."""
+        import jwt as pyjwt
+        from src.oauth import get_rsa_public_pem
+
+        try:
+            # Peek at the algorithm without verifying to pick the right key
+            try:
+                header = pyjwt.get_unverified_header(token)
+                alg = header.get("alg", "HS256")
+            except pyjwt.DecodeError:
+                logger.debug("verify_token: cannot decode header")
+                return None
+
+            base_url = settings.mcp_server_url.rstrip("/")
+            valid_issuers = {
+                settings.jwt_issuer,
+                base_url,
+            }
+
+            if alg == "RS256":
+                decode_key = get_rsa_public_pem()
+                algorithms = ["RS256"]
+            else:
+                decode_key = settings.jwt_secret_key
+                algorithms = [settings.jwt_algorithm]
+
+            # Skip PyJWT audience validation: Claude may send the resource
+            # URL in many forms (with/without trailing slash, with /sse path).
+            # We do our own flexible audience check below.
+            payload = pyjwt.decode(
+                token,
+                decode_key,
+                algorithms=algorithms,
+                options={
+                    "verify_signature": True,
+                    "verify_exp": True,
+                    "verify_aud": False,  # manual check below
+                    "require": ["sub", "exp"],
+                },
+            )
+
+            # Flexible audience check: accept mcp:// legacy, exact base URL,
+            # base URL with trailing slash, or any path under base URL.
+            aud = payload.get("aud")
+            if aud is not None:
+                aud_list = [aud] if isinstance(aud, str) else aud
+                def _aud_ok(a: str) -> bool:
+                    return (
+                        a == settings.mcp_audience
+                        or a.rstrip("/") == base_url
+                        or a.startswith(base_url + "/")
+                    )
+                if not any(_aud_ok(a) for a in aud_list):
+                    logger.warning("verify_token: invalid audience %r (base=%r)", aud, base_url)
+                    return None
+
+            # Validate issuer if present
+            iss = payload.get("iss")
+            if iss and iss not in valid_issuers:
+                logger.warning("verify_token: invalid issuer %r", iss)
+                return None
+
+            user_id = int(payload["sub"])
+            scopes = payload.get("scope", "").split()
+            exp = payload.get("exp")
+
+            logger.info("verify_token: authenticated user_id=%d alg=%s", user_id, alg)
+            return AccessToken(
+                token=token,
+                client_id=str(user_id),
+                scopes=scopes,
+                expires_at=int(exp) if exp else None,
+            )
+
+        except pyjwt.ExpiredSignatureError:
+            logger.info("verify_token: token expired")
+            return None
+        except pyjwt.InvalidAudienceError:
+            logger.warning("verify_token: invalid audience")
+            return None
+        except (pyjwt.PyJWTError, ValueError, TypeError) as exc:
+            logger.debug("verify_token: validation failed: %s", exc)
+            return None
+
+
+# Create the JWT verifier — protects the SSE endpoint so Claude/Cursor see
+# a proper 401 + WWW-Authenticate header and trigger the OAuth 2.1 flow.
+_jwt_verifier = MCPTokenVerifier(
+    base_url=settings.mcp_server_url.rstrip("/"),
+    required_scopes=[],   # scope enforced per-tool via authenticate_from_context
+)
+
+
+# ---------------------------------------------------------------------------
+# Logging middleware
+# ---------------------------------------------------------------------------
 
 class AuthDebugMiddleware(BaseHTTPMiddleware):
     """Log every request with its auth status to diagnose token issues."""
@@ -41,7 +163,6 @@ def log_tool(fn):
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
         tool_name = fn.__name__
-        # Build a dict of all non-ctx args for logging
         import inspect
         sig = inspect.signature(fn)
         bound = sig.bind(*args, **kwargs)
@@ -61,7 +182,11 @@ def log_tool(fn):
     return wrapper
 
 
-# Create MCP server instance
+# ---------------------------------------------------------------------------
+# MCP server instance — auth= ensures SSE endpoint returns 401 + WWW-Authenticate
+# so Claude Code / Cursor trigger the OAuth 2.1 browser flow automatically.
+# ---------------------------------------------------------------------------
+
 mcp = FastMCP(
     name=settings.mcp_server_name,
     version=settings.mcp_server_version,
@@ -72,7 +197,8 @@ mcp = FastMCP(
         "Le categorie organizzano i task in gruppi (es. Lavoro, Casa, Sport). "
         "Le note sono post-it digitali con testo libero e colore. "
         "Usa i tool 'show_*' per visualizzare dati nell'app mobile, e i tool 'get_*' per elaborazione interna."
-    )
+    ),
+    auth=_jwt_verifier,
 )
 
 mcp.add_middleware(AuthDebugMiddleware)
@@ -154,6 +280,9 @@ from src.oauth import (
 
 mcp.custom_route("/.well-known/jwks.json",               methods=["GET"])(jwks_endpoint)
 mcp.custom_route("/.well-known/oauth-protected-resource",  methods=["GET"])(protected_resource_metadata)
+# Path-scoped variant: claude.ai first tries /.well-known/oauth-protected-resource/sse
+# before falling back to the non-scoped form (RFC 9728 §4.2).
+mcp.custom_route("/.well-known/oauth-protected-resource/sse", methods=["GET"])(protected_resource_metadata)
 mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])(authorization_server_metadata)
 mcp.custom_route("/oauth/register",  methods=["POST"])(dynamic_client_registration)
 mcp.custom_route("/oauth/authorize", methods=["GET"])(authorize_get)
