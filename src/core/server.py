@@ -8,7 +8,6 @@ from fastmcp.server.auth import TokenVerifier, AccessToken
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-from pydantic import AnyHttpUrl
 from src.config import settings
 
 logger = logging.getLogger(__name__)
@@ -26,16 +25,9 @@ class MCPTokenVerifier(TokenVerifier):
     Supports RS256 tokens (issued via OAuth 2.1 flow for Claude/Cursor)
     and HS256 tokens (legacy mobile-app direct access).
 
-    Overrides _get_resource_url so the WWW-Authenticate header produced by
-    RequireAuthMiddleware points to /.well-known/oauth-protected-resource
-    (our custom route) rather than the path-scoped variant.
+    Uses FastMCP default resource URL behavior so WWW-Authenticate can point
+    to path-scoped protected resource metadata for /sse requests.
     """
-
-    def _get_resource_url(self, path: str | None = None) -> AnyHttpUrl | None:
-        # Use just base_url — build_resource_metadata_url("https://host")
-        # produces "https://host/.well-known/oauth-protected-resource", which
-        # matches the custom route already registered on this server.
-        return self.base_url
 
     async def verify_token(self, token: str) -> AccessToken | None:
         """Validate a Bearer token and return AccessToken if valid."""
@@ -169,31 +161,6 @@ class AuthDebugMiddleware(BaseHTTPMiddleware):
                 proto or "(none)",
                 accept[:60] or "(none)",
             )
-            if auth.lower().startswith("bearer "):
-                token = auth.split(" ", 1)[1].strip()
-                try:
-                    import jwt as pyjwt
-
-                    hdr = pyjwt.get_unverified_header(token)
-                    payload = pyjwt.decode(
-                        token,
-                        options={
-                            "verify_signature": False,
-                            "verify_exp": False,
-                            "verify_aud": False,
-                        },
-                    )
-                    logger.info(
-                        "[REQ-AUTH] kid=%r alg=%r iss=%r aud=%r sub=%r exp=%r",
-                        hdr.get("kid"),
-                        hdr.get("alg"),
-                        payload.get("iss"),
-                        payload.get("aud"),
-                        payload.get("sub"),
-                        payload.get("exp"),
-                    )
-                except Exception as exc:
-                    logger.warning("[REQ-AUTH] cannot inspect bearer token: %s", exc)
 
         response = await call_next(request)
 
