@@ -10,9 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -LsSf https://astral.sh/uv/install.sh | sh
-
-ENV PATH="/root/.local/bin:${PATH}"
+    && curl -LsSf https://astral.sh/uv/install.sh | sh \
+    && cp /root/.local/bin/uv /usr/local/bin/uv
 
 # Install locked dependencies with uv
 COPY pyproject.toml uv.lock ./
@@ -20,6 +19,9 @@ RUN uv sync --frozen --no-dev
 
 # Copy application code
 COPY . .
+
+# Use project virtualenv by default at runtime
+ENV PATH="/app/.venv/bin:${PATH}"
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
@@ -30,4 +32,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD python -c "import urllib.request, os; urllib.request.urlopen(f'http://localhost:{os.getenv(\"PORT\", 8000)}/health')"
 
-CMD ["uv", "run", "python", "main.py"]
+CMD ["python", "main.py"]
