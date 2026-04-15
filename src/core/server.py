@@ -120,6 +120,20 @@ class MCPTokenVerifier(TokenVerifier):
             )
             return None
 
+    def _build_auth_info(self, request: Request):
+        """
+        Ensure WWW-Authenticate advertises /sse as protected resource metadata.
+        This keeps RFC 9728 resource discovery consistent with Claude's configured
+        MCP endpoint URL (https://.../sse).
+        """
+        info = super()._build_auth_info(request)
+        try:
+            base = self.base_url.rstrip("/")
+            info.resource_metadata_url = f"{base}/.well-known/oauth-protected-resource/sse"
+        except Exception:
+            pass
+        return info
+
 
 # Create the JWT verifier — protects the SSE endpoint so Claude/Cursor see
 # a proper 401 + WWW-Authenticate header and trigger the OAuth 2.1 flow.

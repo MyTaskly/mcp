@@ -294,9 +294,10 @@ async def protected_resource_metadata(request: Request) -> Response:
     if request.method == "OPTIONS":
         return Response(status_code=204, headers=_CORS_HEADERS)
     base = settings.mcp_server_url.rstrip("/")
-    path = request.url.path or ""
-    is_sse_scoped = path.endswith("/oauth-protected-resource/sse")
-    resource = f"{base}/sse" if is_sse_scoped else base
+    # Claude is configured against the MCP endpoint URL (.../sse).
+    # Return the exact resource identifier consistently on both metadata routes
+    # (scoped and non-scoped) to avoid client-side RFC 9728 mismatches.
+    resource = f"{base}/sse"
 
     return JSONResponse(
         {
