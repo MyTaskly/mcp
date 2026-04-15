@@ -43,13 +43,13 @@ if __name__ == "__main__":
         logger.info(f"Starting MCP server in SSE mode on {host}:{port}...")
         logger.info("Ready to accept HTTP connections")
 
-        # Run with SSE transport.
-        # SSE transport wraps GET /sse with RequireAuthMiddleware (returns 401
-        # so Claude / Cursor trigger the OAuth 2.1 browser flow), then opens the
-        # SSE stream on successful auth.  MCP messages flow via POST /messages.
-        # Streamable HTTP (transport="http") does NOT support GET-based SSE when
-        # auth= is set, so it must not be used here.
-        mcp.run(transport="sse", host=host, port=port)
+        # Run with Streamable HTTP transport.
+        # claude.ai web uses POST /sse (Streamable HTTP protocol) after OAuth.
+        # SSE mode (GET /sse) causes POST /sse → 405, making claude.ai report
+        # "Authorization with the MCP server failed".
+        # RequireAuthMiddleware wraps POST /sse → returns 401 + WWW-Authenticate
+        # so Claude Code / Cursor / claude.ai trigger the OAuth 2.1 browser flow.
+        mcp.run(transport="http", host=host, port=port)
     except Exception as e:
         logger.error(f"Failed to start server: {e}", exc_info=True)
         sys.exit(1)
