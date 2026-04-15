@@ -128,8 +128,8 @@ def _verify_pkce(code_verifier: str, code_challenge: str, method: str = "S256") 
 
 def _issue_mcp_jwt(user_id: int, audience: str = "", expires_minutes: int = 60) -> str:
     """
-    Issue an RS256 JWT for the OAuth flow.
-    Signed with the ephemeral RSA private key; verifiable via GET /.well-known/jwks.json.
+    Issue an access token JWT for the OAuth flow.
+    Uses shared-secret signing so tokens remain valid across multiple instances.
     `audience` is the exact resource URL Claude passed (RFC 8707) — trailing slash included.
     `iss` matches `issuer` in /.well-known/oauth-authorization-server.
     """
@@ -145,9 +145,8 @@ def _issue_mcp_jwt(user_id: int, audience: str = "", expires_minutes: int = 60) 
     }
     return jwt.encode(
         payload,
-        _rsa_private_pem,
-        algorithm="RS256",
-        headers={"kid": _rsa_key_id},
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
     )
 
 
