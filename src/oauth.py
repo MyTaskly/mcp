@@ -85,6 +85,7 @@ def get_jwks() -> dict:
 def get_rsa_public_pem() -> bytes:
     return _rsa_public_pem
 
+
 # ---------------------------------------------------------------------------
 # In-memory stores (single-process; fine for Railway / single-dyno deploys)
 # ---------------------------------------------------------------------------
@@ -108,6 +109,7 @@ def _purge_expired_codes() -> None:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _load_login_html() -> str:
     template_path = os.path.join(os.path.dirname(__file__), "templates", "login.html")
@@ -156,43 +158,97 @@ async def _authenticate_user(username: str, password: str) -> Optional[int]:
     Step 2: GET  /auth/me     → {"id": "<user_id>", ...}  (integer user_id)
     Returns user_id on success, None on failure.
     """
+    login_url = f"{settings.fastapi_base_url}/auth/login"
+    me_url = f"{settings.fastapi_base_url}/auth/me"
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             # Step 1 — login
             resp = await client.post(
-                f"{settings.fastapi_base_url}/auth/login",
+                login_url,
                 headers={
                     "X-API-Key": settings.fastapi_api_key,
                     "Content-Type": "application/json",
+                    "Accept": "application/json",
                 },
                 json={"username": username, "password": password},
             )
             if resp.status_code != 200:
-                logger.warning("FastAPI login returned %d for user %r", resp.status_code, username)
+                body_preview = (resp.text or "")[:400]
+                logger.warning(
+                    "FastAPI login failed: status=%d url=%s user=%r body=%r",
+                    resp.status_code,
+                    login_url,
+                    username,
+                    body_preview,
+                )
                 return None
 
-            bearer_token = resp.json().get("bearer_token")
+            login_json = resp.json()
+            bearer_token = (
+                login_json.get("bearer_token")
+                or login_json.get("access_token")
+                or login_json.get("token")
+            )
             if not bearer_token:
-                logger.error("FastAPI login response missing bearer_token")
+                logger.error(
+                    "FastAPI login response missing token field. keys=%s",
+                    sorted(login_json.keys()),
+                )
                 return None
 
             # Step 2 — resolve integer user_id via /auth/me
             me_resp = await client.get(
-                f"{settings.fastapi_base_url}/auth/me",
+                me_url,
                 headers={
                     "X-API-Key": settings.fastapi_api_key,
                     "Authorization": f"Bearer {bearer_token}",
+                    "Accept": "application/json",
                 },
             )
             if me_resp.status_code != 200:
-                logger.error("GET /auth/me returned %d", me_resp.status_code)
+                body_preview = (me_resp.text or "")[:400]
+                logger.error(
+                    "FastAPI /auth/me failed: status=%d url=%s body=%r",
+                    me_resp.status_code,
+                    me_url,
+                    body_preview,
+                )
                 return None
 
-            user_id_str = me_resp.json().get("id")
+            me_json = me_resp.json()
+            user_id_str = me_json.get("id") or me_json.get("user_id")
+            if not user_id_str:
+                logger.error("FastAPI /auth/me missing user id. payload=%r", me_json)
+                return None
             return int(user_id_str) if user_id_str else None
 
-        except (httpx.HTTPError, ValueError, TypeError) as exc:
-            logger.error("Authentication error: %s", exc)
+        except httpx.TimeoutException as exc:
+            logger.error(
+                "Authentication timeout calling FastAPI (base=%s, login=%s, me=%s): %s (%r)",
+                settings.fastapi_base_url,
+                login_url,
+                me_url,
+                type(exc).__name__,
+                exc,
+            )
+            return None
+        except httpx.HTTPError as exc:
+            logger.error(
+                "Authentication HTTP error calling FastAPI (base=%s, login=%s, me=%s): %s (%r)",
+                settings.fastapi_base_url,
+                login_url,
+                me_url,
+                type(exc).__name__,
+                exc,
+            )
+            return None
+        except (ValueError, TypeError) as exc:
+            logger.error(
+                "Authentication parse error from FastAPI responses: %s (%r)",
+                type(exc).__name__,
+                exc,
+            )
             return None
 
 
@@ -226,6 +282,7 @@ def _render_login(
 # ---------------------------------------------------------------------------
 # Route handlers
 # ---------------------------------------------------------------------------
+
 
 async def jwks_endpoint(request: Request) -> Response:
     """GET /.well-known/jwks.json — RSA public key for JWT verification"""
@@ -423,7 +480,9 @@ async def token_endpoint(request: Request) -> Response:
     code_verifier = str(form.get("code_verifier", ""))
 
     if grant_type != "authorization_code":
-        return JSONResponse({"error": "unsupported_grant_type"}, status_code=400, headers=_CORS_HEADERS)
+        return JSONResponse(
+            {"error": "unsupported_grant_type"}, status_code=400, headers=_CORS_HEADERS
+        )
 
     if not all([code, redirect_uri, client_id, code_verifier]):
         return JSONResponse(
@@ -462,7 +521,9 @@ async def token_endpoint(request: Request) -> Response:
             headers=_CORS_HEADERS,
         )
 
-    if not _verify_pkce(code_verifier, code_data["code_challenge"], code_data["code_challenge_method"]):
+    if not _verify_pkce(
+        code_verifier, code_data["code_challenge"], code_data["code_challenge_method"]
+    ):
         return JSONResponse(
             {"error": "invalid_grant", "error_description": "PKCE verification failed"},
             status_code=400,
