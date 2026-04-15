@@ -134,7 +134,21 @@ def _issue_mcp_jwt(user_id: int, audience: str = "", expires_minutes: int = 60) 
     `iss` matches `issuer` in /.well-known/oauth-authorization-server.
     """
     now = datetime.now(timezone.utc)
-    aud = audience or settings.mcp_server_url
+    requested_aud = audience or settings.mcp_server_url
+    base = settings.mcp_server_url.rstrip("/")
+    aud_candidates = [
+        requested_aud,
+        requested_aud.rstrip("/"),
+        requested_aud.rstrip("/") + "/",
+        base,
+        base + "/",
+        base + "/sse",
+    ]
+    # Keep order, remove empty/duplicates
+    aud = []
+    for candidate in aud_candidates:
+        if candidate and candidate not in aud:
+            aud.append(candidate)
     payload = {
         "sub": str(user_id),
         "aud": aud,
@@ -294,12 +308,19 @@ async def protected_resource_metadata(request: Request) -> Response:
     if request.method == "OPTIONS":
         return Response(status_code=204, headers=_CORS_HEADERS)
     base = settings.mcp_server_url.rstrip("/")
+    base = settings.mcp_server_url.rstrip("/")
     return JSONResponse(
         {
             "resource": base,
+            "resource_name": settings.mcp_server_name,
             "authorization_servers": [base],
             "scopes_supported": ["mcp:tools"],
             "bearer_methods_supported": ["header"],
+            "resource_documentation": f"{base}/",
+            "mcp_transport": {
+                "type": "http",
+                "path": "/sse",
+            },
         },
         headers={"Cache-Control": "no-store", **_CORS_HEADERS},
     )
@@ -568,7 +589,6 @@ async def token_endpoint(request: Request) -> Response:
             "token_type": "Bearer",
             "expires_in": 3600,
             "scope": "mcp:tools",
-            "resource": audience,
         },
         headers={"Cache-Control": "no-store", "Pragma": "no-cache", **_CORS_HEADERS},
     )
