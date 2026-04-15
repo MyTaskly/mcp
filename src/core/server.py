@@ -7,6 +7,7 @@ from fastmcp import FastMCP
 from fastmcp.server.auth import TokenVerifier, AccessToken
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
+from starlette.responses import Response
 from pydantic import AnyHttpUrl
 from src.config import settings
 
@@ -277,6 +278,16 @@ from src.oauth import (
     authorize_post,
     token_endpoint,
 )
+
+# ---------------------------------------------------------------------------
+# Health check — no auth required, used by Railway / load balancers
+# ---------------------------------------------------------------------------
+from starlette.responses import JSONResponse as _JSONResponse
+
+async def _health_handler(request: Request) -> Response:
+    return _JSONResponse({"status": "ok", "server": settings.mcp_server_name})  # type: ignore[return-value]
+
+mcp.custom_route("/health", methods=["GET"])(_health_handler)
 
 mcp.custom_route("/.well-known/jwks.json",               methods=["GET"])(jwks_endpoint)
 mcp.custom_route("/.well-known/oauth-protected-resource",  methods=["GET"])(protected_resource_metadata)

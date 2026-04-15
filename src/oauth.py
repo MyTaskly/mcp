@@ -30,6 +30,14 @@ from starlette.responses import JSONResponse, HTMLResponse, RedirectResponse, Re
 
 from src.config import settings
 
+# CORS headers required for browser-based clients (claude.ai web, Cursor web, …)
+_CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type, MCP-Protocol-Version",
+    "Access-Control-Expose-Headers": "WWW-Authenticate",
+}
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -221,11 +229,13 @@ def _render_login(
 
 async def jwks_endpoint(request: Request) -> Response:
     """GET /.well-known/jwks.json — RSA public key for JWT verification"""
-    return JSONResponse(get_jwks(), headers={"Cache-Control": "no-store"})
+    return JSONResponse(get_jwks(), headers={"Cache-Control": "no-store", **_CORS_HEADERS})
 
 
 async def protected_resource_metadata(request: Request) -> Response:
     """GET /.well-known/oauth-protected-resource  (RFC 9728)"""
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers=_CORS_HEADERS)
     base = settings.mcp_server_url.rstrip("/")
     return JSONResponse(
         {
@@ -234,12 +244,14 @@ async def protected_resource_metadata(request: Request) -> Response:
             "scopes_supported": ["mcp:tools"],
             "bearer_methods_supported": ["header"],
         },
-        headers={"Cache-Control": "no-store"},
+        headers={"Cache-Control": "no-store", **_CORS_HEADERS},
     )
 
 
 async def authorization_server_metadata(request: Request) -> Response:
     """GET /.well-known/oauth-authorization-server  (RFC 8414)"""
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers=_CORS_HEADERS)
     base = settings.mcp_server_url.rstrip("/")
     return JSONResponse(
         {
@@ -255,18 +267,21 @@ async def authorization_server_metadata(request: Request) -> Response:
             "scopes_supported": ["mcp:tools"],
             "id_token_signing_alg_values_supported": ["RS256"],
         },
-        headers={"Cache-Control": "no-store"},
+        headers={"Cache-Control": "no-store", **_CORS_HEADERS},
     )
 
 
 async def dynamic_client_registration(request: Request) -> Response:
     """POST /oauth/register  (RFC 7591 — Dynamic Client Registration)"""
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers=_CORS_HEADERS)
     try:
         body = await request.json()
     except Exception:
         return JSONResponse(
             {"error": "invalid_request", "error_description": "Body must be JSON"},
             status_code=400,
+            headers=_CORS_HEADERS,
         )
 
     redirect_uris = body.get("redirect_uris", [])
@@ -274,6 +289,7 @@ async def dynamic_client_registration(request: Request) -> Response:
         return JSONResponse(
             {"error": "invalid_request", "error_description": "redirect_uris required"},
             status_code=400,
+            headers=_CORS_HEADERS,
         )
 
     client_id = str(uuid.uuid4())
@@ -287,7 +303,7 @@ async def dynamic_client_registration(request: Request) -> Response:
     }
     _clients[client_id] = record
     logger.info("Registered new OAuth client: %s (%s)", client_id, record["client_name"])
-    return JSONResponse(record, status_code=201)
+    return JSONResponse(record, status_code=201, headers=_CORS_HEADERS)
 
 
 async def authorize_get(request: Request) -> Response:
@@ -393,10 +409,12 @@ async def authorize_post(request: Request) -> Response:
 
 async def token_endpoint(request: Request) -> Response:
     """POST /oauth/token — exchange code for access token"""
+    if request.method == "OPTIONS":
+        return Response(status_code=204, headers=_CORS_HEADERS)
     try:
         form = await request.form()
     except Exception:
-        return JSONResponse({"error": "invalid_request"}, status_code=400)
+        return JSONResponse({"error": "invalid_request"}, status_code=400, headers=_CORS_HEADERS)
 
     grant_type = str(form.get("grant_type", ""))
     code = str(form.get("code", ""))
@@ -405,12 +423,13 @@ async def token_endpoint(request: Request) -> Response:
     code_verifier = str(form.get("code_verifier", ""))
 
     if grant_type != "authorization_code":
-        return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
+        return JSONResponse({"error": "unsupported_grant_type"}, status_code=400, headers=_CORS_HEADERS)
 
     if not all([code, redirect_uri, client_id, code_verifier]):
         return JSONResponse(
             {"error": "invalid_request", "error_description": "Missing required parameters"},
             status_code=400,
+            headers=_CORS_HEADERS,
         )
 
     code_data = _auth_codes.get(code)
@@ -418,6 +437,7 @@ async def token_endpoint(request: Request) -> Response:
         return JSONResponse(
             {"error": "invalid_grant", "error_description": "Unknown or already-used code"},
             status_code=400,
+            headers=_CORS_HEADERS,
         )
 
     if datetime.now(timezone.utc) > code_data["expires_at"]:
@@ -425,24 +445,28 @@ async def token_endpoint(request: Request) -> Response:
         return JSONResponse(
             {"error": "invalid_grant", "error_description": "Authorization code expired"},
             status_code=400,
+            headers=_CORS_HEADERS,
         )
 
     if code_data["client_id"] != client_id:
         return JSONResponse(
             {"error": "invalid_grant", "error_description": "client_id mismatch"},
             status_code=400,
+            headers=_CORS_HEADERS,
         )
 
     if code_data["redirect_uri"] != redirect_uri:
         return JSONResponse(
             {"error": "invalid_grant", "error_description": "redirect_uri mismatch"},
             status_code=400,
+            headers=_CORS_HEADERS,
         )
 
     if not _verify_pkce(code_verifier, code_data["code_challenge"], code_data["code_challenge_method"]):
         return JSONResponse(
             {"error": "invalid_grant", "error_description": "PKCE verification failed"},
             status_code=400,
+            headers=_CORS_HEADERS,
         )
 
     # One-time use — delete immediately
@@ -465,5 +489,5 @@ async def token_endpoint(request: Request) -> Response:
             "expires_in": 3600,
             "scope": "mcp:tools",
         },
-        headers={"Cache-Control": "no-store", "Pragma": "no-cache"},
+        headers={"Cache-Control": "no-store", "Pragma": "no-cache", **_CORS_HEADERS},
     )
