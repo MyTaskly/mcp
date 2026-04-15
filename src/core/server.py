@@ -136,6 +136,12 @@ class MCPTokenVerifier(TokenVerifier):
             pass
         return info
 
+    async def get_jwks(self):
+        """Expose signing keys for RS256 verification by MCP clients."""
+        from src.oauth import get_jwks
+
+        return get_jwks()
+
 
 # Create the JWT verifier — protects the SSE endpoint so Claude/Cursor see
 # a proper 401 + WWW-Authenticate header and trigger the OAuth 2.1 flow.

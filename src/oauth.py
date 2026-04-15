@@ -128,8 +128,8 @@ def _verify_pkce(code_verifier: str, code_challenge: str, method: str = "S256") 
 
 def _issue_mcp_jwt(user_id: int, audience: str = "", expires_minutes: int = 60) -> str:
     """
-    Issue an access token JWT for the OAuth flow.
-    Uses shared-secret signing so tokens remain valid across multiple instances.
+    Issue an RS256 access token JWT for the OAuth flow.
+    Signed with the RSA private key and advertised via JWKS.
     `audience` is the exact resource URL Claude passed (RFC 8707) — trailing slash included.
     `iss` matches `issuer` in /.well-known/oauth-authorization-server.
     """
@@ -145,8 +145,9 @@ def _issue_mcp_jwt(user_id: int, audience: str = "", expires_minutes: int = 60) 
     }
     return jwt.encode(
         payload,
-        settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm,
+        _rsa_private_pem,
+        algorithm="RS256",
+        headers={"kid": _rsa_key_id},
     )
 
 
@@ -547,6 +548,24 @@ async def token_endpoint(request: Request) -> Response:
     audience = code_data.get("resource") or settings.mcp_server_url
     logger.info("Issuing token: user_id=%d aud=%r", user_id, audience)
     access_token = _issue_mcp_jwt(user_id, audience=audience, expires_minutes=60)
+
+    try:
+        hdr = jwt.get_unverified_header(access_token)
+        claims = jwt.decode(
+            access_token,
+            options={"verify_signature": False, "verify_exp": False, "verify_aud": False},
+        )
+        logger.info(
+            "OAuth token debug: alg=%r kid=%r iss=%r aud=%r sub=%r exp=%r",
+            hdr.get("alg"),
+            hdr.get("kid"),
+            claims.get("iss"),
+            claims.get("aud"),
+            claims.get("sub"),
+            claims.get("exp"),
+        )
+    except Exception as exc:
+        logger.warning("OAuth token debug decode failed: %s", exc)
 
     logger.info("Access token issued for user_id=%d via OAuth flow", user_id)
     return JSONResponse(
