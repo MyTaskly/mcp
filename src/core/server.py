@@ -139,12 +139,29 @@ class AuthDebugMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         auth = request.headers.get("Authorization", "")
-        if auth:
-            preview = auth[:30] + "..." if len(auth) > 30 else auth
-            logger.info("[AUTH] %s %s | Header: %s", request.method, request.url.path, preview)
+        session_id = request.headers.get("Mcp-Session-Id", "")
+        proto = request.headers.get("MCP-Protocol-Version", request.headers.get("mcp-protocol-version", ""))
+        accept = request.headers.get("Accept", "")
+
+        # Log every request to /sse or OAuth endpoints for tracing
+        is_sse = request.url.path in ("/sse", "/messages")
+        is_oauth = request.url.path.startswith("/oauth") or request.url.path.startswith("/.well-known")
+        if auth or is_sse or is_oauth:
+            preview = (auth[:40] + "...") if len(auth) > 40 else auth
+            logger.info(
+                "[REQ] %s %s | Auth: %s | Session: %s | Proto: %s | Accept: %s",
+                request.method, request.url.path,
+                preview or "(none)",
+                session_id or "(none)",
+                proto or "(none)",
+                accept[:60] or "(none)",
+            )
+
         response = await call_next(request)
-        if auth or response.status_code in (401, 403):
-            logger.info("[AUTH] %s %s → %d", request.method, request.url.path, response.status_code)
+
+        if auth or is_sse or is_oauth or response.status_code in (400, 401, 403, 405):
+            logger.info("[RES] %s %s → %d", request.method, request.url.path, response.status_code)
+
         return response
 
 
