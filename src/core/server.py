@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 # JWT verifier: wraps our RS256 OAuth flow + legacy HS256 support
 # ---------------------------------------------------------------------------
 
+
 class MCPTokenVerifier(TokenVerifier):
     """
     FastMCP TokenVerifier that validates JWTs issued by our OAuth server.
@@ -83,12 +84,14 @@ class MCPTokenVerifier(TokenVerifier):
             aud = payload.get("aud")
             if aud is not None:
                 aud_list = [aud] if isinstance(aud, str) else aud
+
                 def _aud_ok(a: str) -> bool:
                     return (
                         a == settings.mcp_audience
                         or a.rstrip("/") == base_url
                         or a.startswith(base_url + "/")
                     )
+
                 if not any(_aud_ok(a) for a in aud_list):
                     logger.warning("verify_token: invalid audience %r (base=%r)", aud, base_url)
                     return None
@@ -118,7 +121,11 @@ class MCPTokenVerifier(TokenVerifier):
             logger.warning("verify_token: invalid audience")
             return None
         except (pyjwt.PyJWTError, ValueError, TypeError) as exc:
-            logger.debug("verify_token: validation failed: %s", exc)
+            logger.warning(
+                "verify_token: validation failed (%s): %s",
+                type(exc).__name__,
+                exc,
+            )
             return None
 
 
@@ -126,7 +133,7 @@ class MCPTokenVerifier(TokenVerifier):
 # a proper 401 + WWW-Authenticate header and trigger the OAuth 2.1 flow.
 _jwt_verifier = MCPTokenVerifier(
     base_url=settings.mcp_server_url.rstrip("/"),
-    required_scopes=[],   # scope enforced per-tool via authenticate_from_context
+    required_scopes=[],  # scope enforced per-tool via authenticate_from_context
 )
 
 
@@ -134,23 +141,29 @@ _jwt_verifier = MCPTokenVerifier(
 # Logging middleware
 # ---------------------------------------------------------------------------
 
+
 class AuthDebugMiddleware(BaseHTTPMiddleware):
     """Log every request with its auth status to diagnose token issues."""
 
     async def dispatch(self, request: Request, call_next):
         auth = request.headers.get("Authorization", "")
         session_id = request.headers.get("Mcp-Session-Id", "")
-        proto = request.headers.get("MCP-Protocol-Version", request.headers.get("mcp-protocol-version", ""))
+        proto = request.headers.get(
+            "MCP-Protocol-Version", request.headers.get("mcp-protocol-version", "")
+        )
         accept = request.headers.get("Accept", "")
 
         # Log every request to /sse or OAuth endpoints for tracing
         is_sse = request.url.path in ("/sse", "/messages")
-        is_oauth = request.url.path.startswith("/oauth") or request.url.path.startswith("/.well-known")
+        is_oauth = request.url.path.startswith("/oauth") or request.url.path.startswith(
+            "/.well-known"
+        )
         if auth or is_sse or is_oauth:
             preview = (auth[:40] + "...") if len(auth) > 40 else auth
             logger.info(
                 "[REQ] %s %s | Auth: %s | Session: %s | Proto: %s | Accept: %s",
-                request.method, request.url.path,
+                request.method,
+                request.url.path,
                 preview or "(none)",
                 session_id or "(none)",
                 proto or "(none)",
@@ -178,17 +191,16 @@ def _serialize(obj):
 
 def log_tool(fn):
     """Decorator that logs tool input parameters and output result."""
+
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
         tool_name = fn.__name__
         import inspect
+
         sig = inspect.signature(fn)
         bound = sig.bind(*args, **kwargs)
         bound.apply_defaults()
-        params = {
-            k: v for k, v in bound.arguments.items()
-            if k != "ctx"
-        }
+        params = {k: v for k, v in bound.arguments.items() if k != "ctx"}
         logger.info(f"[TOOL] {tool_name} INPUT: {_serialize(params)}")
         try:
             result = await fn(*args, **kwargs)
@@ -197,6 +209,7 @@ def log_tool(fn):
         except Exception as e:
             logger.error(f"[TOOL] {tool_name} ERROR: {e}")
             raise
+
     return wrapper
 
 
@@ -227,7 +240,7 @@ from src.tools.categories import (
     create_category,
     update_category,
     show_categories_to_user,
-    show_category_details
+    show_category_details,
 )
 
 from src.tools.tasks import (
@@ -238,16 +251,10 @@ from src.tools.tasks import (
     get_overdue_tasks,
     get_upcoming_tasks,
     add_task,
-    show_tasks_to_user
+    show_tasks_to_user,
 )
 
-from src.tools.notes import (
-    get_notes,
-    create_note,
-    update_note,
-    delete_note,
-    show_notes_to_user
-)
+from src.tools.notes import get_notes, create_note, update_note, delete_note, show_notes_to_user
 
 from src.tools.meta import add_multiple_tasks
 
@@ -301,18 +308,26 @@ from src.oauth import (
 # ---------------------------------------------------------------------------
 from starlette.responses import JSONResponse as _JSONResponse
 
+
 async def _health_handler(request: Request) -> Response:
     return _JSONResponse({"status": "ok", "server": settings.mcp_server_name})  # type: ignore[return-value]
 
+
 mcp.custom_route("/health", methods=["GET"])(_health_handler)
 
-mcp.custom_route("/.well-known/jwks.json",               methods=["GET"])(jwks_endpoint)
-mcp.custom_route("/.well-known/oauth-protected-resource",  methods=["GET"])(protected_resource_metadata)
+mcp.custom_route("/.well-known/jwks.json", methods=["GET"])(jwks_endpoint)
+mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])(
+    protected_resource_metadata
+)
 # Path-scoped variant: claude.ai first tries /.well-known/oauth-protected-resource/sse
 # before falling back to the non-scoped form (RFC 9728 §4.2).
-mcp.custom_route("/.well-known/oauth-protected-resource/sse", methods=["GET"])(protected_resource_metadata)
-mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])(authorization_server_metadata)
-mcp.custom_route("/oauth/register",  methods=["POST"])(dynamic_client_registration)
+mcp.custom_route("/.well-known/oauth-protected-resource/sse", methods=["GET"])(
+    protected_resource_metadata
+)
+mcp.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])(
+    authorization_server_metadata
+)
+mcp.custom_route("/oauth/register", methods=["POST"])(dynamic_client_registration)
 mcp.custom_route("/oauth/authorize", methods=["GET"])(authorize_get)
 mcp.custom_route("/oauth/authorize", methods=["POST"])(authorize_post)
-mcp.custom_route("/oauth/token",     methods=["POST"])(token_endpoint)
+mcp.custom_route("/oauth/token", methods=["POST"])(token_endpoint)
