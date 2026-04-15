@@ -43,8 +43,11 @@ if __name__ == "__main__":
         logger.info(f"Starting MCP server in SSE mode on {host}:{port}...")
         logger.info("Ready to accept HTTP connections")
 
-        # Run with uvicorn in SSE mode
-        mcp.run(transport="sse", host=host, port=port)
+        # Run with Streamable HTTP transport (handles both GET/SSE and POST/messages
+        # at the same path).  claude.ai and Claude Code use POST to send messages,
+        # which SSE-only mode rejects with 405.  "http" is an alias for
+        # "streamable-http" in FastMCP 3.x.
+        mcp.run(transport="http", path="/sse", host=host, port=port)
     except Exception as e:
         logger.error(f"Failed to start server: {e}", exc_info=True)
         sys.exit(1)
