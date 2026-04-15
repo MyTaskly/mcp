@@ -271,7 +271,15 @@ mcp = FastMCP(
     auth=_jwt_verifier,
 )
 
-mcp.add_middleware(AuthDebugMiddleware)
+# NOTE:
+# FastMCP 3.x middleware hooks are not compatible with Starlette BaseHTTPMiddleware
+# classes passed through mcp.add_middleware(...). Keeping this enabled causes
+# request validation warnings and can break initialize handshakes (-32602) in
+# clients like Cursor/Claude.
+#
+# If request tracing is needed again, re-add logging via FastMCP-native
+# middleware hooks (not BaseHTTPMiddleware).
+# mcp.add_middleware(AuthDebugMiddleware)
 
 # Import and register all tools
 from src.tools.categories import (
