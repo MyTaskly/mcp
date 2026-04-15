@@ -134,21 +134,7 @@ def _issue_mcp_jwt(user_id: int, audience: str = "", expires_minutes: int = 60) 
     `iss` matches `issuer` in /.well-known/oauth-authorization-server.
     """
     now = datetime.now(timezone.utc)
-    requested_aud = audience or settings.mcp_server_url
-    base = settings.mcp_server_url.rstrip("/")
-    aud_candidates = [
-        requested_aud,
-        requested_aud.rstrip("/"),
-        requested_aud.rstrip("/") + "/",
-        base,
-        base + "/",
-        base + "/sse",
-    ]
-    # Keep order, remove empty/duplicates
-    aud = []
-    for candidate in aud_candidates:
-        if candidate and candidate not in aud:
-            aud.append(candidate)
+    aud = audience or settings.mcp_server_url
     payload = {
         "sub": str(user_id),
         "aud": aud,
@@ -308,19 +294,18 @@ async def protected_resource_metadata(request: Request) -> Response:
     if request.method == "OPTIONS":
         return Response(status_code=204, headers=_CORS_HEADERS)
     base = settings.mcp_server_url.rstrip("/")
-    base = settings.mcp_server_url.rstrip("/")
+    path = request.url.path or ""
+    is_sse_scoped = path.endswith("/oauth-protected-resource/sse")
+    resource = f"{base}/sse" if is_sse_scoped else base
+
     return JSONResponse(
         {
-            "resource": base,
+            "resource": resource,
             "resource_name": settings.mcp_server_name,
             "authorization_servers": [base],
             "scopes_supported": ["mcp:tools"],
             "bearer_methods_supported": ["header"],
             "resource_documentation": f"{base}/",
-            "mcp_transport": {
-                "type": "http",
-                "path": "/sse",
-            },
         },
         headers={"Cache-Control": "no-store", **_CORS_HEADERS},
     )
@@ -562,25 +547,6 @@ async def token_endpoint(request: Request) -> Response:
     audience = code_data.get("resource") or settings.mcp_server_url
     logger.info("Issuing token: user_id=%d aud=%r", user_id, audience)
     access_token = _issue_mcp_jwt(user_id, audience=audience, expires_minutes=60)
-
-    # Debug: show JWT header/claims (without full token)
-    try:
-        header = jwt.get_unverified_header(access_token)
-        claims = jwt.decode(
-            access_token,
-            options={"verify_signature": False, "verify_exp": False, "verify_aud": False},
-        )
-        logger.info(
-            "OAuth token debug: kid=%r alg=%r iss=%r aud=%r sub=%r exp=%r",
-            header.get("kid"),
-            header.get("alg"),
-            claims.get("iss"),
-            claims.get("aud"),
-            claims.get("sub"),
-            claims.get("exp"),
-        )
-    except Exception as exc:
-        logger.warning("OAuth token debug decode failed: %s", exc)
 
     logger.info("Access token issued for user_id=%d via OAuth flow", user_id)
     return JSONResponse(
