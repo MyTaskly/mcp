@@ -49,7 +49,10 @@ if __name__ == "__main__":
         # "Authorization with the MCP server failed".
         # RequireAuthMiddleware wraps POST /sse → returns 401 + WWW-Authenticate
         # so Claude Code / Cursor / claude.ai trigger the OAuth 2.1 browser flow.
-        mcp.run(transport="http", host=host, port=port)
+        # path="/sse" keeps the endpoint at /sse (same URL the user enters in
+        # claude.ai / Cursor), while Streamable HTTP still handles POST /sse
+        # correctly (unlike SSE mode which only supports GET /sse).
+        mcp.run(transport="http", host=host, port=port, path="/sse")
     except Exception as e:
         logger.error(f"Failed to start server: {e}", exc_info=True)
         sys.exit(1)
